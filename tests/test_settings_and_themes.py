@@ -76,9 +76,9 @@ def test_reset_procurement_data_api(client: TestClient):
     assert res_reset.status_code == 200
     assert res_reset.json()["status"] == "success"
 
-    # Verify user RFQs are empty after reset
-    rfqs = services.list_rfqs(include_demo=False)
-    assert len(rfqs) == 0
+    # Verify RFQs remain permanently preserved after reset
+    rfqs = services.list_rfqs(include_demo=True)
+    assert len(rfqs) > 0
 
     # Verify item master catalog is preserved
     im = services.get_item_master()

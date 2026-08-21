@@ -35,7 +35,17 @@
                     <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; display: block; margin-bottom: 0.35rem;">
                         RFQ Identifier / Number *
                     </label>
-                    <input type="text" name="rfq_id" id="rfq_id" placeholder="e.g. RFQ-2026-001" required value="RFQ-{{ range(1000, 9999)|random }}">
+                    <input type="text" name="rfq_id" id="rfq_id" placeholder="e.g. RFQ-2026-001" required>
+                    <script>
+                        (function() {
+                            const now = new Date();
+                            const y = now.getFullYear();
+                            const m = String(now.getMonth() + 1).padStart(2, '0');
+                            const d = String(now.getDate()).padStart(2, '0');
+                            const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
+                            document.getElementById('rfq_id').value = `RFQ-${y}${m}${d}-${rand}`;
+                        })();
+                    </script>
                 </div>
                 <div>
                     <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; display: block; margin-bottom: 0.35rem;">

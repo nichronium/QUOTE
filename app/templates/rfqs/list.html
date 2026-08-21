@@ -1,24 +1,62 @@
 {% extends "base.html" %}
 
-{% block title %}Procurement RFQs — Quote Intelligence{% endblock %}
+{% block title %}Procurement RFQs &amp; Sourcing Rounds — Quote Intelligence{% endblock %}
 
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
-    <div>
-        <h1 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main);">Procurement Rounds &amp; RFQs</h1>
-        <p style="font-size: 0.8125rem; color: var(--text-muted);">
-            Create sourcing rounds, upload supplier quotations, align items to Item Master, and determine optimal commercial awards.
-        </p>
+<div class="breadcrumb-bar">
+    <div class="breadcrumbs">
+        <a href="/">Home</a>
+        <span class="breadcrumb-separator">/</span>
+        <span class="breadcrumb-current">Procurement Rounds &bull; RFQs</span>
     </div>
     <div>
         <a href="/rfqs/create" class="btn btn-primary btn-sm">+ Create New RFQ</a>
     </div>
 </div>
 
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 1rem;">
+    <div>
+        <h1 style="font-size: 1.35rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.25rem;">
+            Procurement Rounds &amp; RFQs
+        </h1>
+        <p style="font-size: 0.8125rem; color: var(--text-muted); margin: 0;">
+            Permanent historical sourcing records. Create procurement requests, ingest supplier quotes, and finalize optimal awards.
+        </p>
+    </div>
+</div>
+
+<!-- Lifecycle Status Filter Tabs -->
+<div class="card" style="padding: 0.75rem 1rem; margin-bottom: 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+        <div style="display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
+            <a href="/rfqs?status=all" class="btn btn-sm {% if status_filter == 'all' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size: 0.75rem;">
+                All ({{ total_count }})
+            </a>
+            <a href="/rfqs?status=active" class="btn btn-sm {% if status_filter == 'active' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size: 0.75rem;">
+                Active ({{ active_count }})
+            </a>
+            <a href="/rfqs?status=closed" class="btn btn-sm {% if status_filter == 'closed' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size: 0.75rem;">
+                Closed ({{ closed_count }})
+            </a>
+            <a href="/rfqs?status=cancelled" class="btn btn-sm {% if status_filter == 'cancelled' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size: 0.75rem;">
+                Cancelled ({{ cancelled_count }})
+            </a>
+            <a href="/rfqs?status=archived" class="btn btn-sm {% if status_filter == 'archived' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size: 0.75rem;">
+                Archived ({{ archived_count }})
+            </a>
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-muted);">
+            Displaying: <strong>{{ rfqs|length }}</strong> of {{ total_count }} records
+        </div>
+    </div>
+</div>
+
 {% if rfqs %}
 <div class="card" style="border-top: 3px solid var(--accent);">
     <div class="card-header">
-        <div class="card-title">Active Procurement Rounds ({{ rfqs|length }})</div>
+        <div class="card-title">
+            Procurement Rounds ({{ rfqs|length }})
+        </div>
     </div>
 
     <table>
@@ -29,8 +67,8 @@
                 <th>Base Currency</th>
                 <th>Requested Scope</th>
                 <th>Supplier Quotes</th>
-                <th>Round Status</th>
-                <th style="text-align: right;">Action</th>
+                <th>Lifecycle / Stage</th>
+                <th style="text-align: right;">Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -43,7 +81,10 @@
                     {% endif %}
                 </td>
                 <td>
-                    <div style="font-weight: 700; font-size: 0.875rem;">{{ r.title }}</div>
+                    <div style="font-weight: 700; font-size: 0.875rem; color: var(--text-main);">{{ r.title }}</div>
+                    {% if r.created_at %}
+                    <div style="font-size: 0.7rem; color: var(--text-muted);">Created: {{ r.created_at[:16].replace('T', ' ') }}</div>
+                    {% endif %}
                 </td>
                 <td>
                     <span class="badge badge-info">{{ r.base_currency }}</span>
@@ -58,8 +99,14 @@
                     {% endif %}
                 </td>
                 <td>
-                    {% if r.status == 'EVALUATED' %}
-                        <span class="badge badge-success">Award Evaluated</span>
+                    {% if r.lifecycle_status == 'ARCHIVED' %}
+                        <span class="badge badge-muted" style="background: rgba(148,163,184,0.2); color: #64748b;">Archived</span>
+                    {% elif r.lifecycle_status == 'CANCELLED' %}
+                        <span class="badge badge-danger">Cancelled</span>
+                    {% elif r.lifecycle_status == 'CLOSED' or r.status == 'AWARD_FINALIZED' %}
+                        <span class="badge badge-success">Award Finalized</span>
+                    {% elif r.status == 'EVALUATED' %}
+                        <span class="badge badge-success">Evaluated</span>
                     {% elif r.status == 'READY_FOR_COMPARISON' %}
                         <span class="badge badge-success">Ready to Compare</span>
                     {% elif r.status == 'MATCHING_REVIEW' %}
@@ -71,9 +118,23 @@
                     {% endif %}
                 </td>
                 <td style="text-align: right;">
-                    <a href="/rfqs/{{ r.rfq_id }}" class="btn btn-primary btn-sm">
-                        Open Workspace &rarr;
-                    </a>
+                    <div style="display: flex; justify-content: flex-end; gap: 0.35rem; align-items: center;">
+                        <a href="/rfqs/{{ r.rfq_id }}" class="btn btn-primary btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.55rem;">
+                            Open &rarr;
+                        </a>
+                        {% if r.lifecycle_status in ['ARCHIVED', 'CANCELLED'] %}
+                        <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.2rem 0.45rem;" onclick="restoreRfq('{{ r.rfq_id }}')">
+                            Restore
+                        </button>
+                        {% else %}
+                        <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.2rem 0.45rem;" onclick="archiveRfq('{{ r.rfq_id }}')">
+                            Archive
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.2rem 0.45rem; color: #ef4444;" onclick="cancelRfq('{{ r.rfq_id }}')">
+                            Cancel
+                        </button>
+                        {% endif %}
+                    </div>
                 </td>
             </tr>
             {% endfor %}
@@ -83,16 +144,69 @@
 {% else %}
 <div class="card" style="text-align: center; padding: 4rem 1.5rem; border-top: 3px solid var(--accent);">
     <h2 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.5rem;">
-        No Procurement Rounds Yet
+        No RFQs Found for this Filter
     </h2>
     <p style="font-size: 0.875rem; color: var(--text-muted); max-width: 520px; margin: 0 auto 1.5rem auto; line-height: 1.6;">
-        Create your first RFQ to define your item requirements, upload supplier quotations, and determine the optimal commercial award.
+        No procurement records match the current lifecycle filter. Switch filter or create a new procurement RFQ.
     </p>
     <div style="display: flex; justify-content: center; gap: 1rem;">
-        <a href="/rfqs/create" class="btn btn-primary" style="padding: 0.6rem 1.4rem; font-size: 0.875rem;">
-            + Create New RFQ &rarr;
+        <a href="/rfqs?status=all" class="btn btn-secondary" style="padding: 0.5rem 1.2rem; font-size: 0.8125rem;">
+            View All RFQs
+        </a>
+        <a href="/rfqs/create" class="btn btn-primary" style="padding: 0.5rem 1.2rem; font-size: 0.8125rem;">
+            + Create New RFQ
         </a>
     </div>
 </div>
 {% endif %}
+
+<script>
+async function archiveRfq(rfqId) {
+    if (!confirm(`Archive RFQ '${rfqId}'? The RFQ and all historical quotations, comparisons, and awards remain permanently preserved on disk.`)) {
+        return;
+    }
+    try {
+        const res = await fetch(`/api/rfqs/${rfqId}/archive`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to archive RFQ.');
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function cancelRfq(rfqId) {
+    if (!confirm(`Mark RFQ '${rfqId}' as Cancelled? All historical data will remain intact in storage.`)) {
+        return;
+    }
+    try {
+        const res = await fetch(`/api/rfqs/${rfqId}/cancel`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to cancel RFQ.');
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function restoreRfq(rfqId) {
+    try {
+        const res = await fetch(`/api/rfqs/${rfqId}/restore`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to restore RFQ.');
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+</script>
 {% endblock %}

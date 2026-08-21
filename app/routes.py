@@ -44,12 +44,31 @@ async def home_page(request: Request):
 
 
 @router.get("/rfqs", response_class=HTMLResponse)
-async def list_rfqs_page(request: Request):
-    rfqs = services.list_rfqs()
+async def list_rfqs_page(request: Request, status: Optional[str] = None):
+    status_filter = (status or "all").lower().strip()
+    all_rfqs_unfiltered = services.list_rfqs(include_demo=True, lifecycle_filter="all")
+    filtered_rfqs = services.list_rfqs(include_demo=True, lifecycle_filter=status_filter)
+    
+    # Calculate lifecycle tab counts
+    total_count = len(all_rfqs_unfiltered)
+    active_count = sum(1 for r in all_rfqs_unfiltered if r.get("lifecycle_status") not in ["ARCHIVED", "CANCELLED", "CLOSED"])
+    closed_count = sum(1 for r in all_rfqs_unfiltered if r.get("lifecycle_status") in ["CLOSED", "AWARD_FINALIZED"])
+    cancelled_count = sum(1 for r in all_rfqs_unfiltered if r.get("lifecycle_status") == "CANCELLED")
+    archived_count = sum(1 for r in all_rfqs_unfiltered if r.get("lifecycle_status") == "ARCHIVED")
+
     return templates.TemplateResponse(
         request=request,
         name="rfqs/list.html",
-        context={"rfqs": rfqs, "active_tab": "rfqs"}
+        context={
+            "rfqs": filtered_rfqs,
+            "status_filter": status_filter,
+            "total_count": total_count,
+            "active_count": active_count,
+            "closed_count": closed_count,
+            "cancelled_count": cancelled_count,
+            "archived_count": archived_count,
+            "active_tab": "rfqs"
+        }
     )
 
 
@@ -75,8 +94,40 @@ async def save_new_rfq(
     except Exception:
         items = []
 
-    services.create_rfq(rfq_id, title, base_currency, items)
-    return RedirectResponse(url=f"/rfqs/{rfq_id}", status_code=303)
+    created_doc = services.create_rfq(rfq_id, title, base_currency, items)
+    return RedirectResponse(url=f"/rfqs/{created_doc.rfq_id}", status_code=303)
+
+
+@router.post("/api/rfqs/{rfq_id}/archive")
+async def api_archive_rfq(rfq_id: str):
+    rfq = services.archive_rfq(rfq_id)
+    if not rfq:
+        raise HTTPException(status_code=404, detail="RFQ not found")
+    return {"status": "success", "message": f"RFQ '{rfq_id}' has been archived."}
+
+
+@router.post("/api/rfqs/{rfq_id}/cancel")
+async def api_cancel_rfq(rfq_id: str):
+    rfq = services.cancel_rfq(rfq_id)
+    if not rfq:
+        raise HTTPException(status_code=404, detail="RFQ not found")
+    return {"status": "success", "message": f"RFQ '{rfq_id}' has been cancelled."}
+
+
+@router.post("/api/rfqs/{rfq_id}/restore")
+async def api_restore_rfq(rfq_id: str):
+    rfq = services.restore_rfq_lifecycle(rfq_id)
+    if not rfq:
+        raise HTTPException(status_code=404, detail="RFQ not found")
+    return {"status": "success", "message": f"RFQ '{rfq_id}' has been restored to Active."}
+
+
+@router.post("/api/rfqs/{rfq_id}/delete")
+async def api_delete_rfq(rfq_id: str):
+    success, message = services.delete_rfq_safe(rfq_id)
+    if not success:
+        raise HTTPException(status_code=404, detail=message)
+    return {"status": "success", "message": message}
 
 
 @router.get("/rfqs/{rfq_id}", response_class=HTMLResponse)

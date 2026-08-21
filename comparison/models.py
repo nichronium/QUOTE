@@ -168,12 +168,30 @@ class SupplierComparison(BaseModel):
     issues: List[ComparisonIssue] = Field(default_factory=list)
 
 
+class RFQStatus(str, Enum):
+    DRAFT = "DRAFT"
+    OPEN = "OPEN"
+    QUOTATIONS_RECEIVED = "QUOTATIONS_RECEIVED"
+    UNDER_REVIEW = "UNDER_REVIEW"
+    COMPARISON_READY = "COMPARISON_READY"
+    AWARD_DRAFT = "AWARD_DRAFT"
+    AWARDED = "AWARDED"
+    CLOSED = "CLOSED"
+    CANCELLED = "CANCELLED"
+    ARCHIVED = "ARCHIVED"
+
+
 class RFQDocument(BaseModel):
-    """Enterprise RFQ Request envelope."""
+    """Enterprise RFQ Request envelope with immutable identity and permanent lifecycle persistence."""
     rfq_id: str
     title: str
     base_currency: str = "INR"
-    items: List[RFQLineItem]
+    status: str = "DRAFT"  # "DRAFT" | "OPEN" | "AWARDED" | "CLOSED" | "CANCELLED" | "ARCHIVED"
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    archived_at: Optional[str] = None
+    items: List[RFQLineItem] = Field(default_factory=list)
+
 
 
 class SupplierQuoteSubmission(BaseModel):
