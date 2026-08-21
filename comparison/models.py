@@ -83,8 +83,8 @@ class NormalizedItemPrice(BaseModel):
     # Quantity & UOM
     quoted_qty: Decimal
     quoted_uom: str
-    requested_qty: Decimal
-    requested_uom: str
+    requested_qty: Optional[Decimal] = None
+    requested_uom: Optional[str] = None
     uom_conversion_factor: Decimal = Decimal("1.0")  # target_units = quoted_units * factor
 
     # Tier Pricing metadata
@@ -121,8 +121,8 @@ class ItemComparison(BaseModel):
     """Comparison across all suppliers for a specific RFQ Line Item."""
     rfq_line_id: str
     item_description: str
-    requested_quantity: Decimal
-    requested_uom: str
+    requested_quantity: Optional[Decimal] = None
+    requested_uom: Optional[str] = None
     supplier_prices: Dict[str, NormalizedItemPrice] = Field(default_factory=dict)
     comparable_supplier_ids: List[str] = Field(default_factory=list)
     provisional_supplier_ids: List[str] = Field(default_factory=list)

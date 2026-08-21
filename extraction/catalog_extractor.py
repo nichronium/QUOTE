@@ -51,10 +51,18 @@ class CatalogExtractor:
         "mfg part no", "mfg pn", "mpn", "oem part number", "oem pn", "catalog no", "cat no"
     ]
 
+    QTY_ALIASES = [
+        "required quantity", "required qty", "req quantity", "req qty",
+        "requested quantity", "requested qty", "order quantity", "order qty",
+        "purchase quantity", "purchase qty", "target quantity", "target qty",
+        "procurement quantity", "procurement qty", "quantity", "qty", "demand",
+        "units required", "units req", "volume"
+    ]
+
     UOM_ALIASES = [
         "stocking uom", "stocking_uom", "stocking unit", "stock unit", "base uom",
         "base unit", "unit of measure", "unit", "units", "uom", "u.o.m", "packaging unit",
-        "pack size", "measure"
+        "pack size", "measure", "req uom", "requested uom"
     ]
 
     BRAND_ALIASES = [
@@ -83,8 +91,23 @@ class CatalogExtractor:
                 all_tables.append((t, page.sheet_name or f"Page {page.page_number}"))
 
         if not all_tables and ast.grid:
-            # Grid fallback if parser built grid without pre-segmented tables
-            pass
+            for sheet in ast.grid.sheets:
+                if sheet.cells and len(sheet.cells) >= 2:
+                    hdr_row = sheet.cells[0]
+                    headers = [c.display_value for c in hdr_row]
+                    data_rows = []
+                    for r_idx, r in enumerate(sheet.cells[1:], start=2):
+                        row_vals = [c.display_value for c in r]
+                        if any(v.strip() for v in row_vals):
+                            data_rows.append(TableRow(row_index=r_idx, cells=row_vals))
+                    cand_table = ExtractedTable(
+                        page_number=sheet.sheet_index,
+                        headers=headers,
+                        rows=data_rows,
+                        sheet_name=sheet.sheet_name,
+                        table_score=0.6
+                    )
+                    all_tables.append((cand_table, sheet.sheet_name))
 
         if not all_tables:
             return CatalogExtractionResult(
@@ -122,6 +145,7 @@ class CatalogExtractor:
         desc_col = col_map.get("desc")
         mpn_col = col_map.get("mpn")
         uom_col = col_map.get("uom")
+        qty_col = col_map.get("qty")
         brand_col = col_map.get("brand")
         spec_cols = col_map.get("specs", [])
 
@@ -134,6 +158,8 @@ class CatalogExtractor:
             detected_cols_display["Description"] = f"Column {desc_col+1} ({headers[desc_col] or 'Description'})"
         if mpn_col is not None and mpn_col < len(headers):
             detected_cols_display["Manufacturer PN"] = f"Column {mpn_col+1} ({headers[mpn_col] or 'MPN'})"
+        if qty_col is not None and qty_col < len(headers):
+            detected_cols_display["Requested Quantity"] = f"Column {qty_col+1} ({headers[qty_col] or 'Quantity'})"
         if uom_col is not None and uom_col < len(headers):
             detected_cols_display["Stocking UOM"] = f"Column {uom_col+1} ({headers[uom_col] or 'UOM'})"
         if brand_col is not None and brand_col < len(headers):
@@ -153,7 +179,6 @@ class CatalogExtractor:
             raw_sku = str(cells[sku_col]).strip() if sku_col is not None and sku_col < len(cells) and cells[sku_col] is not None else ""
             raw_desc = str(cells[desc_col]).strip() if desc_col is not None and desc_col < len(cells) and cells[desc_col] is not None else ""
             raw_mpn = str(cells[mpn_col]).strip() if mpn_col is not None and mpn_col < len(cells) and cells[mpn_col] is not None else ""
-            raw_uom = str(cells[uom_col]).strip() if uom_col is not None and uom_col < len(cells) and cells[uom_col] is not None else ""
             raw_brand = str(cells[brand_col]).strip() if brand_col is not None and brand_col < len(cells) and cells[brand_col] is not None else ""
 
             # Check if row is purely whitespace or summary
@@ -182,10 +207,27 @@ class CatalogExtractor:
             else:
                 final_desc = raw_desc
 
-            # Fallback & Validation for UOM
-            final_uom = self._normalize_uom(raw_uom)
-            if not raw_uom or raw_uom.lower() == "none":
-                warnings.append(f"Row {r_idx+1}: Missing stocking unit for SKU '{final_sku}'; defaulted to 'PCS'.")
+            # Source-driven UOM: NEVER default to PCS if missing from source cell
+            raw_uom_str = str(cells[uom_col]).strip() if uom_col is not None and uom_col < len(cells) and cells[uom_col] is not None else ""
+            final_uom = self._normalize_uom(raw_uom_str)
+            if not final_uom and uom_col is not None:
+                warnings.append(f"Row {r_idx+1}: Missing UOM for item '{raw_sku or raw_desc}'; left as unassigned.")
+
+            # Source-driven Quantity: NEVER default to 100 if missing from source cell
+            raw_qty: Optional[float] = None
+            if qty_col is not None and qty_col < len(cells) and cells[qty_col] is not None:
+                q_str = str(cells[qty_col]).strip()
+                q_clean = re.sub(r"[^\d\.]", "", q_str)
+                if q_clean:
+                    try:
+                        q_val = float(q_clean)
+                        if q_val > 0:
+                            raw_qty = q_val
+                    except ValueError:
+                        raw_qty = None
+
+            if raw_qty is None and qty_col is not None:
+                warnings.append(f"Row {r_idx+1}: Non-numeric or missing quantity for item '{raw_sku or raw_desc}'.")
 
             # Collect specifications from extra mapped spec columns
             specs = {}
@@ -201,7 +243,7 @@ class CatalogExtractor:
                 manufacturer_part_number=raw_mpn if raw_mpn and raw_mpn.lower() != "none" else None,
                 approved_supplier_part_numbers=[final_sku] if final_sku else [],
                 canonical_description=final_desc,
-                stocking_uom=final_uom,
+                stocking_uom=final_uom or "PCS",
                 brand=raw_brand if raw_brand and raw_brand.lower() != "none" else "Standard",
                 specifications=specs
             )
@@ -212,6 +254,9 @@ class CatalogExtractor:
                 "canonical_description": final_desc,
                 "manufacturer_part_number": raw_mpn if raw_mpn and raw_mpn.lower() != "none" else "",
                 "stocking_uom": final_uom,
+                "requested_uom": final_uom,
+                "quantity": raw_qty,
+                "requested_quantity": raw_qty,
                 "brand": raw_brand if raw_brand and raw_brand.lower() != "none" else "Standard",
                 "specifications": specs,
                 "approved_supplier_part_numbers": [final_sku]
@@ -265,23 +310,27 @@ class CatalogExtractor:
             h_clean = re.sub(r"[^\w\s]", "", h).strip()
             
             # SKU check
-            if any(alias in h_clean for alias in self.SKU_ALIASES) and "sku" not in col_map:
+            if any(alias == h_clean or f" {alias} " in f" {h_clean} " for alias in self.SKU_ALIASES) and "sku" not in col_map:
                 col_map["sku"] = idx
                 score += 0.35
             # Description check
-            elif any(alias in h_clean for alias in self.DESC_ALIASES) and "desc" not in col_map:
+            elif any(alias == h_clean or f" {alias} " in f" {h_clean} " for alias in self.DESC_ALIASES) and "desc" not in col_map:
                 col_map["desc"] = idx
                 score += 0.35
             # MPN check
-            elif any(alias in h_clean for alias in self.MPN_ALIASES) and "mpn" not in col_map:
+            elif any(alias == h_clean or f" {alias} " in f" {h_clean} " for alias in self.MPN_ALIASES) and "mpn" not in col_map:
                 col_map["mpn"] = idx
                 score += 0.15
+            # Quantity check (Explicit quantity headers only, NEVER roll number / student id / serial)
+            elif any(alias == h_clean or f" {alias} " in f" {h_clean} " for alias in self.QTY_ALIASES) and "qty" not in col_map:
+                col_map["qty"] = idx
+                score += 0.20
             # UOM check
-            elif any(alias in h_clean for alias in self.UOM_ALIASES) and "uom" not in col_map:
+            elif any(alias == h_clean or f" {alias} " in f" {h_clean} " for alias in self.UOM_ALIASES) and "uom" not in col_map:
                 col_map["uom"] = idx
                 score += 0.15
             # Brand check
-            elif any(alias in h_clean for alias in self.BRAND_ALIASES) and "brand" not in col_map:
+            elif any(alias == h_clean or f" {alias} " in f" {h_clean} " for alias in self.BRAND_ALIASES) and "brand" not in col_map:
                 col_map["brand"] = idx
                 score += 0.10
             # Specs check
@@ -291,7 +340,6 @@ class CatalogExtractor:
 
         # Fallbacks for positional table structures without explicit matching header names
         if "sku" not in col_map and len(headers) >= 1:
-            # If col 0 looks like codes
             col_map["sku"] = 0
             score += 0.20
         if "desc" not in col_map and len(headers) >= 2:
@@ -304,11 +352,13 @@ class CatalogExtractor:
 
         return round(score, 2), col_map
 
-    def _normalize_uom(self, uom_str: str) -> str:
-        """Normalizes UOM string to common standard units."""
-        u = uom_str.upper().strip()
-        if not u:
-            return "PCS"
+    def _normalize_uom(self, uom_str: Optional[str]) -> Optional[str]:
+        """Normalizes UOM string to common standard units. Returns None if empty or missing."""
+        if not uom_str:
+            return None
+        u = str(uom_str).upper().strip()
+        if not u or u.lower() in ["none", "null", "n/a", "na", "-", "—"]:
+            return None
         if u in ["PC", "PCS", "PIECE", "PIECES", "UNIT", "UNITS", "EA", "EACH"]:
             return "PCS"
         if u in ["NO", "NOS", "NUMBER", "NUMBERS"]:
@@ -319,8 +369,10 @@ class CatalogExtractor:
             return "BOX"
         if u in ["SET", "SETS"]:
             return "SET"
-        if u in ["KG", "KGS", "KILOGRAM"]:
+        if u in ["KG", "KGS", "KILOGRAM", "KILOGRAMS"]:
             return "KG"
         if u in ["LTR", "LITER", "LITERS", "L"]:
             return "LTR"
+        if u in ["FT", "FEET", "FOOT"]:
+            return "FT"
         return u

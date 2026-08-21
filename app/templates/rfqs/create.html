@@ -278,6 +278,23 @@
                 const isCatalog = it.is_matched;
                 const displaySku = it.matched_sku || it.raw_sku || ('REQ-ITEM-' + (idx + 1));
                 const displayDesc = it.matched_description || it.raw_description || displaySku;
+                const hasQty = it.raw_qty !== null && it.raw_qty !== undefined && !isNaN(it.raw_qty) && it.raw_qty > 0;
+                const hasUom = it.raw_uom !== null && it.raw_uom !== undefined && it.raw_uom.trim() !== '' && it.raw_uom !== 'N/A' && it.raw_uom !== 'None';
+
+                const qtyDisplay = hasQty ? `<strong>${it.raw_qty}</strong>` : `<span class="badge badge-warning" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);">N/A (Missing)</span>`;
+                const uomDisplay = hasUom ? `<span class="badge badge-info">${it.raw_uom}</span>` : `<span class="badge badge-warning" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);">N/A (Missing)</span>`;
+
+                let statusBadge = '';
+                if (!hasQty || !hasUom) {
+                    const missingDetails = [];
+                    if (!hasQty) missingDetails.push('Missing Qty');
+                    if (!hasUom) missingDetails.push('Missing UOM');
+                    statusBadge = `<span class="badge badge-warning" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);">Incomplete (${missingDetails.join(' & ')})</span>`;
+                } else if (isCatalog) {
+                    statusBadge = `<span class="badge badge-success">In Catalog</span>`;
+                } else {
+                    statusBadge = `<span class="badge badge-purple">+ New Item (Will Add)</span>`;
+                }
 
                 tr.innerHTML = `
                     <td><code>${idx + 1}</code></td>
@@ -285,13 +302,9 @@
                     <td>
                         <div style="font-weight: 600; color: var(--text-main);">${displayDesc}</div>
                     </td>
-                    <td><strong>${it.raw_qty || 100}</strong></td>
-                    <td><span class="badge badge-info">${it.raw_uom || 'PCS'}</span></td>
-                    <td>
-                        <span class="badge ${isCatalog ? 'badge-success' : 'badge-purple'}">
-                            ${isCatalog ? 'In Catalog' : '+ New Item (Will Add)'}
-                        </span>
-                    </td>
+                    <td>${qtyDisplay}</td>
+                    <td>${uomDisplay}</td>
+                    <td>${statusBadge}</td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -316,8 +329,10 @@
         const items = importedItems.map((it, idx) => {
             const sku = it.matched_sku || it.raw_sku || ("REQ-SKU-" + (idx + 1));
             const desc = it.matched_description || it.raw_description || sku;
-            const uom = it.raw_uom || "PCS";
-            const qty = parseFloat(it.raw_qty) || 100.0;
+            const hasUom = it.raw_uom !== null && it.raw_uom !== undefined && it.raw_uom.trim() !== '' && it.raw_uom !== 'N/A' && it.raw_uom !== 'None';
+            const uom = hasUom ? it.raw_uom.trim().toUpperCase() : null;
+            const hasQty = it.raw_qty !== null && it.raw_qty !== undefined && !isNaN(it.raw_qty) && it.raw_qty > 0;
+            const qty = hasQty ? parseFloat(it.raw_qty) : null;
             const item_id = it.matched_item_id || ("ITEM-" + sku);
 
             return {
@@ -331,8 +346,14 @@
         });
 
         document.getElementById('items_json').value = JSON.stringify(items);
-        document.getElementById('selected-summary').innerText = `${items.length} requirement items loaded from spreadsheet for this RFQ`;
-        document.getElementById('import-count-msg').innerHTML = `<span style="color: var(--success); font-weight: 700;">✓ ${items.length} items successfully loaded into RFQ scope!</span>`;
+        const incompleteCount = items.filter(it => it.requested_quantity === null || it.requested_uom === null).length;
+        if (incompleteCount > 0) {
+            document.getElementById('selected-summary').innerHTML = `<span style="color: var(--warning); font-weight: 700;">⚠ ${items.length} requirement items loaded (${incompleteCount} incomplete — missing quantity or UOM)</span>`;
+            document.getElementById('import-count-msg').innerHTML = `<span style="color: var(--warning); font-weight: 700;">⚠ ${items.length} items loaded into RFQ (${incompleteCount} missing required quantity/UOM)</span>`;
+        } else {
+            document.getElementById('selected-summary').innerText = `${items.length} requirement items loaded from spreadsheet for this RFQ`;
+            document.getElementById('import-count-msg').innerHTML = `<span style="color: var(--success); font-weight: 700;">✓ ${items.length} items successfully loaded into RFQ scope!</span>`;
+        }
     }
 
     function validateRfqForm() {

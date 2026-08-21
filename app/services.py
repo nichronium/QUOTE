@@ -161,7 +161,10 @@ def create_rfq(rfq_id: str, title: str, base_currency: str, items: List[Dict[str
     for idx, it in enumerate(items):
         sku = (it.get("sku") or it.get("internal_sku") or it.get("rfq_line_id") or f"SKU-{idx+1:03d}").strip().upper()
         desc = it.get("description") or it.get("canonical_description") or sku
-        uom = (it.get("requested_uom") or it.get("stocking_uom") or "PCS").strip().upper()
+        
+        raw_uom_in = it.get("requested_uom") or it.get("stocking_uom") or it.get("uom")
+        uom_val = str(raw_uom_in).strip().upper() if raw_uom_in and str(raw_uom_in).strip().lower() not in ["none", "null", "n/a", "na", "-", "—"] else None
+        
         item_id = it.get("internal_item_id") or f"ITEM-{sku}"
 
         if sku not in existing_skus and item_id not in existing_ids:
@@ -169,7 +172,7 @@ def create_rfq(rfq_id: str, title: str, base_currency: str, items: List[Dict[str
                 internal_item_id=item_id,
                 internal_sku=sku,
                 canonical_description=desc,
-                stocking_uom=uom,
+                stocking_uom=uom_val or "PCS",
                 brand="Standard"
             ))
             existing_skus.add(sku)
@@ -179,12 +182,27 @@ def create_rfq(rfq_id: str, title: str, base_currency: str, items: List[Dict[str
         current_im.extend(new_im_records)
         save_item_master(current_im)
 
-    # 2. Build RFQLineItem list
+    # 2. Build RFQLineItem list with honest source quantity and UOM
     rfq_items = []
     for idx, it in enumerate(items):
         sku_val = (it.get("sku") or it.get("internal_sku") or it.get("rfq_line_id") or f"SKU-{idx+1:03d}").strip().upper()
         desc_val = it.get("description") or it.get("canonical_description") or sku_val
-        uom_val = (it.get("requested_uom") or it.get("stocking_uom") or "PCS").strip().upper()
+        
+        # Source-driven UOM: preserve None if missing
+        raw_uom_in = it.get("requested_uom") or it.get("stocking_uom") or it.get("uom")
+        uom_val = str(raw_uom_in).strip().upper() if raw_uom_in and str(raw_uom_in).strip().lower() not in ["none", "null", "n/a", "na", "-", "—"] else None
+        
+        # Source-driven Quantity: preserve None if missing
+        raw_qty_in = it.get("requested_quantity") or it.get("quantity") or it.get("qty")
+        qty_val: Optional[Decimal] = None
+        if raw_qty_in is not None and str(raw_qty_in).strip() not in ["", "None", "null", "N/A", "na", "-", "—"]:
+            try:
+                dec = Decimal(str(raw_qty_in))
+                if dec > Decimal("0.0"):
+                    qty_val = dec
+            except Exception:
+                qty_val = None
+
         item_id_val = it.get("internal_item_id") or f"ITEM-{sku_val}"
 
         rfq_items.append(RFQLineItem(
@@ -192,7 +210,7 @@ def create_rfq(rfq_id: str, title: str, base_currency: str, items: List[Dict[str
             internal_item_id=item_id_val,
             sku=sku_val,
             description=desc_val,
-            requested_quantity=Decimal(str(it.get("requested_quantity", "1.0"))),
+            requested_quantity=qty_val,
             requested_uom=uom_val,
             target_unit_price=Decimal(str(it.get("target_unit_price"))) if it.get("target_unit_price") else None,
             approved_uom_conversions={k: Decimal(str(v)) for k, v in it.get("approved_uom_conversions", {}).items()}

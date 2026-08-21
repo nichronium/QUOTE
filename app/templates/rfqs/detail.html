@@ -457,8 +457,12 @@
                     <td>
                         <div style="font-weight: 600; color: var(--text-main);">{{ item.description }}</div>
                     </td>
-                    <td style="text-align: right; font-family: var(--font-mono); font-weight: 700;">{{ item.requested_quantity }}</td>
-                    <td><span class="badge badge-info">{{ item.requested_uom }}</span></td>
+                    <td style="text-align: right; font-family: var(--font-mono); font-weight: 700;">
+                        {% if item.requested_quantity is not none %}{{ item.requested_quantity }}{% else %}<span class="badge badge-warning" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; font-size: 0.7rem;">N/A (Missing)</span>{% endif %}
+                    </td>
+                    <td>
+                        {% if item.requested_uom %}<span class="badge badge-info">{{ item.requested_uom }}</span>{% else %}<span class="badge badge-warning" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; font-size: 0.7rem;">N/A</span>{% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>

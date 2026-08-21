@@ -822,19 +822,28 @@ async def preview_rfq_requirements(file: UploadFile = File(...)):
         sku = item.get("sku") or item.get("internal_sku") or ""
         desc = item.get("canonical_description") or item.get("description") or ""
         mpn = item.get("manufacturer_part_number") or ""
-        uom = item.get("stocking_uom") or item.get("uom") or "PCS"
-        qty_raw = item.get("quantity") or item.get("requested_quantity") or "100"
-        try:
-            qty_val = float(qty_raw)
-        except Exception:
-            qty_val = 100.0
+        
+        # Source-driven UOM: NEVER default to PCS if missing from source document
+        raw_uom_in = item.get("requested_uom") or item.get("stocking_uom") or item.get("uom")
+        uom = str(raw_uom_in).strip().upper() if raw_uom_in and str(raw_uom_in).strip().lower() not in ["none", "null", "n/a", "na", "-", "—"] else None
+        
+        # Source-driven Quantity: NEVER default to 100 or 1.0 if missing from source document
+        raw_qty_in = item.get("requested_quantity") or item.get("quantity") or item.get("qty")
+        qty_val: Optional[float] = None
+        if raw_qty_in is not None and str(raw_qty_in).strip() not in ["", "None", "null", "N/A", "na", "-", "—"]:
+            try:
+                parsed_q = float(raw_qty_in)
+                if parsed_q > 0:
+                    qty_val = parsed_q
+            except Exception:
+                qty_val = None
 
         dummy_quote_item = QuoteItem(
             line_index=idx,
             raw_description=desc or sku,
             supplier_part_number=mpn or None,
-            quoted_qty=Decimal(str(qty_val)),
-            quoted_uom=uom,
+            quoted_qty=Decimal(str(qty_val)) if qty_val is not None else Decimal("1.0"),
+            quoted_uom=uom or "UNSPECIFIED",
             unit_price=Decimal("0.0")
         )
         matched_result = matcher.match_quote_item(dummy_quote_item, im_records)
@@ -843,6 +852,13 @@ async def preview_rfq_requirements(file: UploadFile = File(...)):
         matched_sku = match_candidate.candidate_sku if match_candidate else (sku if any(im.internal_sku == sku for im in item_master) else None)
         matched_item_id = match_candidate.candidate_item_id if match_candidate else (next((im.internal_item_id for im in item_master if im.internal_sku == sku), None))
         match_status = matched_result.match_status.value
+
+        is_complete = (qty_val is not None and uom is not None)
+        missing_fields = []
+        if qty_val is None:
+            missing_fields.append("quantity")
+        if uom is None:
+            missing_fields.append("uom")
 
         preview_rows.append({
             "line_index": idx + 1,
@@ -855,13 +871,17 @@ async def preview_rfq_requirements(file: UploadFile = File(...)):
             "matched_description": match_candidate.candidate_description if match_candidate else desc,
             "match_status": match_status,
             "match_score": round(match_candidate.match_score * 100, 1) if match_candidate else 0.0,
-            "is_matched": matched_sku is not None
+            "is_matched": matched_sku is not None,
+            "is_complete": is_complete,
+            "missing_fields": missing_fields
         })
 
     return JSONResponse(content={
         "filename": file.filename,
         "total_lines": len(preview_rows),
         "matched_count": sum(1 for r in preview_rows if r["is_matched"]),
+        "complete_count": sum(1 for r in preview_rows if r["is_complete"]),
+        "incomplete_count": sum(1 for r in preview_rows if not r["is_complete"]),
         "items": preview_rows
     })
 

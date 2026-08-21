@@ -57,12 +57,21 @@ class CommercialNormalizer:
         base_curr = base_currency.upper().strip()
 
         # 1. UOM Compatibility & Conversion
-        uom_result = self.uom_resolver.resolve_uom_conversion(
-            source_uom=quote_item.quoted_uom,
-            target_uom=rfq_line.requested_uom,
-            quoted_quantity=rfq_line.requested_quantity,
-            rfq_line=rfq_line
-        )
+        if rfq_line.requested_uom and quote_item.quoted_uom:
+            uom_result = self.uom_resolver.resolve_uom_conversion(
+                source_uom=quote_item.quoted_uom,
+                target_uom=rfq_line.requested_uom,
+                quoted_quantity=rfq_line.requested_quantity,
+                rfq_line=rfq_line
+            )
+        else:
+            uom_result = UOMConversionResult(
+                is_compatible=False,
+                source_uom=quote_item.quoted_uom or "UNKNOWN",
+                target_uom=rfq_line.requested_uom or "UNKNOWN",
+                conversion_method="INCOMPATIBLE",
+                error_reason="Missing UOM on RFQ line or quote item"
+            )
 
         uom_factor = uom_result.conversion_factor if uom_result.is_compatible else Decimal("1.0")
         if not uom_result.is_compatible:
@@ -77,17 +86,28 @@ class CommercialNormalizer:
 
         # 2. Required Quantity in Quoted Units
         # (e.g. if RFQ asks for 100 FT and 1 MTR = 3.28084 FT, qty in MTR = 100 / 3.28084)
-        if uom_factor > Decimal("0.0"):
-            rfq_qty_in_quoted_uom = (rfq_line.requested_quantity / uom_factor).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        if rfq_line.requested_quantity is not None and rfq_line.requested_quantity > Decimal("0.0"):
+            if uom_factor > Decimal("0.0"):
+                rfq_qty_in_quoted_uom = (rfq_line.requested_quantity / uom_factor).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            else:
+                rfq_qty_in_quoted_uom = rfq_line.requested_quantity
         else:
-            rfq_qty_in_quoted_uom = rfq_line.requested_quantity
+            rfq_qty_in_quoted_uom = None
+            issues.append(ComparisonIssue(
+                code=ComparisonIssueCode.QUANTITY_MISMATCH,
+                severity=ComparisonIssueSeverity.BLOCKING,
+                message=f"RFQ line '{rfq_line.rfq_line_id}' is missing required quantity.",
+                supplier_id=supplier_id,
+                rfq_line_id=rfq_line.rfq_line_id,
+                field_name="requested_quantity"
+            ))
 
         # 3. Volume Tier Selection
         selected_tier: Optional[PriceTier] = None
         tier_selection_reason: Optional[str] = None
         unit_price_quoted: Decimal = quote_item.unit_price
 
-        if quote_item.price_tiers:
+        if quote_item.price_tiers and rfq_qty_in_quoted_uom is not None:
             matched_tier = self._select_volume_tier(quote_item.price_tiers, rfq_qty_in_quoted_uom)
             if matched_tier:
                 selected_tier = matched_tier
@@ -114,17 +134,20 @@ class CommercialNormalizer:
         net_unit_price_quoted = quantize_currency(
             unit_price_quoted * (Decimal("1.0") - (discount_pct / Decimal("100.0")))
         )
-        line_taxable_quoted = quantize_currency(net_unit_price_quoted * rfq_qty_in_quoted_uom)
-
-        tax_rate_pct = quote_item.tax_rate_pct
-        tax_amount_quoted = quantize_currency(line_taxable_quoted * (tax_rate_pct / Decimal("100.0")))
-
-        line_landed_base_item = line_taxable_quoted + tax_amount_quoted
-        line_landed_cost_quoted = line_landed_base_item + allocated_charge_quoted
-
-        unit_landed_price_quoted = (line_landed_cost_quoted / rfq_line.requested_quantity).quantize(
-            Decimal("0.0001"), rounding=ROUND_HALF_UP
-        )
+        if rfq_qty_in_quoted_uom is not None and rfq_line.requested_quantity is not None:
+            line_taxable_quoted = quantize_currency(net_unit_price_quoted * rfq_qty_in_quoted_uom)
+            tax_rate_pct = quote_item.tax_rate_pct
+            tax_amount_quoted = quantize_currency(line_taxable_quoted * (tax_rate_pct / Decimal("100.0")))
+            line_landed_base_item = line_taxable_quoted + tax_amount_quoted
+            line_landed_cost_quoted = line_landed_base_item + allocated_charge_quoted
+            unit_landed_price_quoted = (line_landed_cost_quoted / rfq_line.requested_quantity).quantize(
+                Decimal("0.0001"), rounding=ROUND_HALF_UP
+            )
+        else:
+            line_taxable_quoted = Decimal("0.00")
+            tax_amount_quoted = Decimal("0.00")
+            line_landed_cost_quoted = Decimal("0.00")
+            unit_landed_price_quoted = Decimal("0.0000")
 
         # 5. Currency Normalization
         exchange_rate: Optional[Decimal] = None

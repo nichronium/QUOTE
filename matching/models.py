@@ -35,8 +35,8 @@ class RFQLineItem(BaseModel):
     internal_item_id: Optional[str] = None
     sku: Optional[str] = None
     description: str
-    requested_quantity: Decimal = Field(gt=Decimal("0.0"))
-    requested_uom: str
+    requested_quantity: Optional[Decimal] = Field(default=None, gt=Decimal("0.0"))
+    requested_uom: Optional[str] = None
     target_unit_price: Optional[Decimal] = None
     approved_uom_conversions: Dict[str, Decimal] = Field(default_factory=dict)
 
