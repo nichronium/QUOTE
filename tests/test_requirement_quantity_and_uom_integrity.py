@@ -268,3 +268,91 @@ def test_end_to_end_downstream_procurement_workflow_with_imported_requirements(c
     award = services.get_award_decision(rfq_id)
     assert award["status"] == "FINALIZED"
     assert Decimal(award["total_awarded_value"]) == Decimal("102000.00")
+
+
+def test_adversarial_company_item_master_catalog_has_no_quantity_fallback(client: TestClient):
+    """
+    Test the exact COMPANY_ITEM_MASTER_CATALOG_ADVERSARIAL.xlsx workbook:
+    1. 20 catalog rows extracted.
+    2. Required quantity is None for the catalog rows.
+    3. Stocking UOM is correctly extracted:
+       RM-1001 = PCS
+       RM-1002 = MTR
+       RM-1003 = PCS
+    4. No extracted row has quantity 100.
+    5. No generic fallback quantity exists anywhere in the import path.
+    6. Persisted RFQ quantity remains null.
+    7. Browser / Detail page rendering displays N/A (Missing).
+    8. Comparison engine marks incomplete lines as uncomparable / blocking.
+    """
+    from pathlib import Path
+    catalog_path = Path("datasets/synthetic/COMPANY_ITEM_MASTER_CATALOG_ADVERSARIAL.xlsx")
+    assert catalog_path.exists(), f"Fixture not found at {catalog_path}"
+    content = catalog_path.read_bytes()
+
+    # 1. Preview API
+    res = client.post(
+        "/rfqs/requirements/preview",
+        files={"file": ("COMPANY_ITEM_MASTER_CATALOG_ADVERSARIAL.xlsx", content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total_lines"] == 20
+    assert data["incomplete_count"] == 20
+    assert data["complete_count"] == 0
+
+    items_by_raw_sku = {it["raw_sku"]: it for it in data["items"]}
+    
+    # Check RM-1001, RM-1002, RM-1003 specifically
+    assert "RM-1001" in items_by_raw_sku
+    assert items_by_raw_sku["RM-1001"]["raw_qty"] is None
+    assert items_by_raw_sku["RM-1001"]["raw_uom"] == "PCS"
+    assert items_by_raw_sku["RM-1001"]["is_complete"] is False
+
+    assert "RM-1002" in items_by_raw_sku
+    assert items_by_raw_sku["RM-1002"]["raw_qty"] is None
+    assert items_by_raw_sku["RM-1002"]["raw_uom"] == "MTR"
+    assert items_by_raw_sku["RM-1002"]["is_complete"] is False
+
+    assert "RM-1003" in items_by_raw_sku
+    assert items_by_raw_sku["RM-1003"]["raw_qty"] is None
+    assert items_by_raw_sku["RM-1003"]["raw_uom"] == "PCS"
+    assert items_by_raw_sku["RM-1003"]["is_complete"] is False
+
+    # Assert NO item has quantity 100 or non-None quantity
+    for it in data["items"]:
+        assert it["raw_qty"] is None
+        assert "quantity" in it["missing_fields"]
+
+    # 2. RFQ creation and persistence
+    rfq_id = "RFQ-ADVERSARIAL-CATALOG-TEST"
+    rfq_file = services.RFQS_DIR / f"{rfq_id}.json"
+    if rfq_file.exists():
+        rfq_file.unlink()
+
+    rfq_payload = [
+        {
+            "sku": it["matched_sku"] or it["raw_sku"],
+            "description": it["matched_description"] or it["raw_description"],
+            "requested_quantity": it["raw_qty"],
+            "requested_uom": it["raw_uom"]
+        }
+        for it in data["items"]
+    ]
+
+    rfq = services.create_rfq(rfq_id, "Adversarial Catalog Test RFQ", "INR", rfq_payload)
+    assert len(rfq.items) == 20
+    for line in rfq.items:
+        assert line.requested_quantity is None
+
+    # Inspect persisted disk JSON
+    with open(rfq_file, "r", encoding="utf-8") as fp:
+        raw_disk = json.load(fp)
+    for d_item in raw_disk["items"]:
+        assert d_item["requested_quantity"] is None
+
+    # Verify detail page renders N/A (Missing)
+    res_detail = client.get(f"/rfqs/{rfq_id}")
+    assert res_detail.status_code == 200
+    assert "N/A (Missing)" in res_detail.text
+

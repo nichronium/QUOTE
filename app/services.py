@@ -1838,8 +1838,9 @@ def _generate_fresh_award_proposal(rfq_id: str, comp: Dict[str, Any], scenario: 
         rfq_line_id = item_comp.get("rfq_line_id")
         sku = item_comp.get("sku") or item_comp.get("rfq_line_id")
         desc = item_comp.get("item_description") or item_comp.get("description") or sku
-        req_qty = Decimal(str(item_comp.get("requested_quantity", 100)))
-        req_uom = item_comp.get("requested_uom", "PCS")
+        raw_req_q = item_comp.get("requested_quantity")
+        req_qty = Decimal(str(raw_req_q)) if raw_req_q is not None and str(raw_req_q).strip() not in ["", "None", "null"] else None
+        req_uom = item_comp.get("requested_uom") or None
 
         supplier_bids = []
         l1_line_supplier_id = None
