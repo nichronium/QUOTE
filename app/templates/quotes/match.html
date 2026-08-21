@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+
+{% block title %}Review &amp; Item Alignment: {{ quote.supplier_raw_name }} — RFQ {{ rfq.rfq_id if rfq else '' }}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb Bar -->
+<div class="breadcrumb-bar">
+    <div class="breadcrumbs">
+        <a href="/rfqs">RFQs</a>
+        <span class="breadcrumb-separator">/</span>
+        {% if rfq %}
+        <a href="/rfqs/{{ rfq.rfq_id }}">{{ rfq.rfq_id }} &bull; {{ rfq.title }}</a>
+        <span class="breadcrumb-separator">/</span>
+        {% endif %}
+        <a href="/quotes/{{ quote_id }}">{{ quote.supplier_raw_name }}</a>
+        <span class="breadcrumb-separator">/</span>
+        <span class="breadcrumb-current">Review &amp; Product Alignment</span>
+    </div>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+        {% if rfq %}
+        <a href="/rfqs/{{ rfq.rfq_id }}" class="btn btn-secondary btn-sm">&larr; Back to RFQ Workspace</a>
+        {% endif %}
+        <a href="/quotes/{{ quote_id }}" class="btn btn-secondary btn-sm">&larr; Back to Quotation</a>
+        <a href="/comparisons/create?rfq_id={{ rfq.rfq_id if rfq else '' }}" class="btn btn-success btn-sm">
+            Proceed to Commercial Comparison &rarr;
+        </a>
+    </div>
+</div>
+
+<!-- Compact 5-Step Progression Stepper -->
+<div class="card" style="padding: 0.85rem 1.25rem; margin-bottom: 1.25rem; background: var(--bg-card); border: 1px solid var(--border-color);">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+            <!-- Stage 1 -->
+            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; font-weight: 700; color: var(--text-main);">
+                <span class="badge badge-success" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">1</span>
+                <span>RFQ Scope</span>
+            </div>
+            <span style="color: var(--text-subtle);">&rarr;</span>
+
+            <!-- Stage 2 -->
+            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; font-weight: 700; color: var(--text-main);">
+                <span class="badge badge-success" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">2</span>
+                <span>Supplier Quotes</span>
+            </div>
+            <span style="color: var(--text-subtle);">&rarr;</span>
+
+            <!-- Stage 3 -->
+            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; font-weight: 700; color: var(--accent);">
+                <span class="badge badge-info" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">3</span>
+                <span>Review &amp; Matching Active</span>
+            </div>
+            <span style="color: var(--text-subtle);">&rarr;</span>
+
+            <!-- Stage 4 -->
+            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; color: var(--text-muted);">
+                <span class="badge badge-muted" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">4</span>
+                <span>Comparison</span>
+            </div>
+            <span style="color: var(--text-subtle);">&rarr;</span>
+
+            <!-- Stage 5 -->
+            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; color: var(--text-muted);">
+                <span class="badge badge-muted" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">5</span>
+                <span>Award</span>
+            </div>
+        </div>
+
+        <div>
+            <a href="/comparisons/create?rfq_id={{ rfq.rfq_id if rfq else '' }}" class="btn btn-success btn-sm">
+                Next: Compare Quotations &rarr;
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Dominant Header Card -->
+<div class="card" style="background: var(--bg-card); border-top: 3px solid var(--accent); padding: 1.25rem; margin-bottom: 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                <span class="badge badge-info">Quotation Review &amp; Alignment</span>
+                {% if rfq %}
+                <code style="color: var(--accent); font-weight: 700; font-size: 0.8125rem;">Target RFQ: {{ rfq.rfq_id }} &bull; {{ rfq.title }}</code>
+                {% endif %}
+                <code style="color: var(--text-muted); font-size: 0.8125rem;">Quotation ID: {{ quote_id }}</code>
+            </div>
+            <h1 style="font-size: 1.4rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.25rem;">
+                {{ quote.supplier_raw_name }} &bull; Item Master Alignment
+            </h1>
+
+            <p style="font-size: 0.8125rem; color: var(--text-muted); max-width: 800px; line-height: 1.5;">
+                Review each supplier quote line mapped to standard Item Master products and RFQ lines. Original document descriptions, quantities, and unit prices remain 100% immutable.
+            </p>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <a href="/comparisons/create?rfq_id={{ rfq.rfq_id if rfq else '' }}" class="btn btn-success btn-sm">
+                Proceed to Commercial Comparison &rarr;
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Matching & Issues Table -->
+<div class="card">
+    <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem;">
+        <div>
+            <div class="card-title">Extracted Quote Items &amp; Resolution Actions ({{ matched_items|length }})</div>
+            <div style="font-size: 0.8125rem; color: var(--text-muted);">
+                Resolved items participate in line-level normalized commercial comparison.
+            </div>
+        </div>
+    </div>
+
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 50px;">Line #</th>
+                    <th style="min-width: 220px;">Supplier Quoted Item</th>
+                    <th style="min-width: 240px;">Proposed RFQ / Item Master Match</th>
+                    <th style="width: 140px;">Issue Category</th>
+                    <th style="width: 130px;">Status</th>
+                    <th style="width: 200px; text-align: right;">Resolution Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in matched_items %}
+                <tr>
+                    <td><code>{{ item.quote_item.line_index + 1 }}</code></td>
+                    <td>
+                        <strong style="color: var(--text-main); font-size: 0.875rem;">{{ item.quote_item.raw_description }}</strong>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">
+                            Quoted: {{ item.quote_item.quoted_qty }} {{ item.quote_item.quoted_uom }} @ {{ quote.currency }} {{ item.quote_item.unit_price }}
+                            {% if item.quote_item.supplier_part_number %}
+                            &bull; PN: <code style="color: var(--accent);">{{ item.quote_item.supplier_part_number }}</code>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        {% if item.item_master_match %}
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <code style="color: var(--accent); font-weight: 700; font-size: 0.8125rem;">{{ item.item_master_match.candidate_sku }}</code>
+                                <span style="color: var(--text-muted); font-size: 0.75rem;">({{ "%.0f"|format(item.item_master_match.match_score * 100) }}% match)</span>
+                            </div>
+                            <div style="font-size: 0.8125rem; color: var(--text-main); margin-top: 0.15rem;">
+                                {{ item.item_master_match.candidate_description }}
+                            </div>
+                            {% if item.item_master_match.explanations %}
+                            <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.15rem;">
+                                {{ item.item_master_match.explanations[0] }}
+                            </div>
+                            {% endif %}
+                        {% else %}
+                            <span style="color: var(--text-muted); font-style: italic;">No Item Master match candidate</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.match_status == 'REVIEW_REQUIRED' %}
+                            <span class="badge badge-warning">MATCHING: Ambiguous</span>
+                        {% elif item.match_status == 'UOM_INCOMPATIBLE' %}
+                            <span class="badge badge-danger">DATA: UOM Conflict</span>
+                        {% elif item.match_status == 'UNMATCHED' %}
+                            <span class="badge badge-muted">MATCHING: Unmatched</span>
+                        {% elif not item.quote_item.unit_price or item.quote_item.unit_price == 0 %}
+                            <span class="badge badge-warning">COMMERCIAL: No Price</span>
+                        {% else %}
+                            <span class="badge badge-success">ALIGNED</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.match_status == 'EXACT_MATCH' %}
+                            <span class="badge badge-success">Exact Match</span>
+                        {% elif item.match_status == 'HIGH_CONFIDENCE_MATCH' %}
+                            <span class="badge badge-info">High Confidence</span>
+                        {% elif item.match_status == 'REVIEW_REQUIRED' %}
+                            <span class="badge badge-warning">Review Needed</span>
+                        {% elif item.match_status == 'UNMATCHED' %}
+                            <span class="badge badge-muted">Unmatched</span>
+                        {% else %}
+                            <span class="badge badge-muted">{{ item.match_status }}</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: right;">
+                        {% if item.match_status == 'REVIEW_REQUIRED' and item.top_candidates %}
+                        <form action="/quotes/{{ quote_id }}/match/resolve" method="POST" style="display: inline-flex; gap: 0.25rem; justify-content: flex-end;">
+                            <input type="hidden" name="line_index" value="{{ item.quote_item.line_index }}">
+                            <select name="chosen_candidate_sku" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; max-width: 140px;">
+                                {% for cand in item.top_candidates %}
+                                <option value="{{ cand.candidate_sku }}">{{ cand.candidate_sku }} ({{ "%.0f"|format(cand.match_score * 100) }}%)</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" name="action" value="ACCEPT" class="btn btn-primary btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                                Confirm
+                            </button>
+                        </form>
+                        {% elif item.match_status == 'UNMATCHED' and item_master %}
+                        <form action="/quotes/{{ quote_id }}/match/resolve" method="POST" style="display: inline-flex; gap: 0.25rem; justify-content: flex-end;">
+                            <input type="hidden" name="line_index" value="{{ item.quote_item.line_index }}">
+                            <select name="chosen_candidate_sku" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; max-width: 140px;">
+                                <option value="">Select SKU...</option>
+                                {% for prod in item_master %}
+                                <option value="{{ prod.internal_sku }}">{{ prod.internal_sku }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" name="action" value="MANUAL_OVERRIDE" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                                Map
+                            </button>
+                        </form>
+                        {% else %}
+                            <span style="font-size: 0.75rem; color: var(--success); font-weight: 600;">✓ Ready</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Bottom Navigation Footer -->
+    <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 1rem; margin-top: 1rem; border-top: 1px solid var(--border-color); flex-wrap: wrap; gap: 0.75rem;">
+        <div style="font-size: 0.8125rem; color: var(--text-muted);">
+            All items resolved can participate in commercial comparison.
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+            {% if rfq %}
+            <a href="/rfqs/{{ rfq.rfq_id }}" class="btn btn-secondary btn-sm">&larr; Back to RFQ Workspace</a>
+            <a href="/rfqs/{{ rfq.rfq_id }}/review" class="btn btn-primary btn-sm">Open RFQ Batch Review Queue &rarr;</a>
+            {% endif %}
+            <a href="/comparisons/create?rfq_id={{ rfq.rfq_id if rfq else '' }}" class="btn btn-success btn-sm">
+                Proceed to Commercial Comparison &rarr;
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Smooth AJAX resolution for per-quote review table
+    document.querySelectorAll('form[action*="/match/resolve"]').forEach(form => {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = form.querySelector('button[type="submit"]');
+            if (btn) btn.disabled = true;
+
+            const formData = new FormData(form);
+            if (e.submitter && e.submitter.value) {
+                formData.set('action', e.submitter.value);
+            }
+
+            try {
+                const res = await fetch(form.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (!res.ok) throw new Error('Resolution failed');
+                
+                const td = form.closest('td');
+                if (td) {
+                    td.innerHTML = '<span style="font-size: 0.75rem; color: var(--success); font-weight: 700;">✓ Aligned & Saved</span>';
+                }
+                const tr = form.closest('tr');
+                if (tr) {
+                    const statusTd = tr.children[4];
+                    if (statusTd) {
+                        statusTd.innerHTML = '<span class="badge badge-success">Exact Match</span>';
+                    }
+                    const catTd = tr.children[3];
+                    if (catTd) {
+                        catTd.innerHTML = '<span class="badge badge-success">ALIGNED</span>';
+                    }
+                }
+            } catch (err) {
+                alert('Error saving match: ' + err.message);
+                if (btn) btn.disabled = false;
+            }
+        });
+    });
+</script>
+{% endblock %}

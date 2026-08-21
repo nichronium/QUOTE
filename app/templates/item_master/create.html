@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Add Product to Catalog — Quote Intelligence{% endblock %}
+
+{% block content %}
+<div class="breadcrumb-bar">
+    <div class="breadcrumbs">
+        <a href="/item-master">Item Master</a>
+        <span class="breadcrumb-separator">/</span>
+        <span class="breadcrumb-current">Add Product Manually</span>
+    </div>
+    <a href="/item-master" class="btn btn-secondary btn-sm">&larr; Back to Item Master</a>
+</div>
+
+<div style="max-width: 760px; margin: 0 auto;">
+    <div style="margin-bottom: 1.5rem;">
+        <h1 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main);">➕ Add Product to Company Catalog</h1>
+        <p style="font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.25rem;">
+            Add products one at a time to your company catalog. Define internal SKU, description, specifications, and approved supplier part numbers.
+        </p>
+    </div>
+
+    <form action="/item-master/new" method="POST">
+        <div class="card" style="border-top: 3px solid var(--accent);">
+            <div class="card-header">
+                <div class="card-title">Product Information</div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                <div>
+                    <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; display: block; margin-bottom: 0.35rem;">
+                        Internal Company SKU *
+                    </label>
+                    <input type="text" name="internal_sku" placeholder="e.g. BEAR-6205-2RS" required style="font-family: var(--font-mono);">
+                </div>
+                <div>
+                    <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; display: block; margin-bottom: 0.35rem;">
+                        Stocking UOM *
+                    </label>
+                    <select name="stocking_uom" required>
+                        <option value="PCS" selected>PCS (Pieces / Units)</option>
+                        <option value="MTR">MTR (Meters)</option>
+                        <option value="NOS">NOS (Numbers)</option>
+                        <option value="SET">SET (Sets)</option>
+                        <option value="BOX">BOX (Boxes)</option>
+                        <option value="KG">KG (Kilograms)</option>
+                        <option value="LTR">LTR (Liters)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 1rem;">
+                <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; display: block; margin-bottom: 0.35rem;">
+                    Canonical Product Description *
+                </label>
+                <input type="text" name="canonical_description" placeholder="e.g. Deep Groove Ball Bearing 25x52x15mm Rubber Sealed" required>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                <div>
+                    <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; display: block; margin-bottom: 0.35rem;">
+                        Manufacturer Part Number (MPN)
+                    </label>
+                    <input type="text" name="manufacturer_part_number" placeholder="e.g. 6205-2RS1" style="font-family: var(--font-mono);">
+                </div>
+                <div>
+                    <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; display: block; margin-bottom: 0.35rem;">
+                        Brand / OEM
+                    </label>
+                    <input type="text" name="brand" placeholder="e.g. SKF, Havells, Standard">
+                </div>
+            </div>
+
+            <div style="margin-bottom: 1rem;">
+                <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; display: block; margin-bottom: 0.35rem;">
+                    Approved Supplier Part Numbers (Comma Separated)
+                </label>
+                <input type="text" name="supplier_parts" placeholder="e.g. SKF-6205-2RS, FAG-6205-2RSR, 6205.2RS">
+                <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem;">
+                    These part numbers will automatically exact-match during supplier quote extraction.
+                </div>
+            </div>
+
+            <div>
+                <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; display: block; margin-bottom: 0.35rem;">
+                    Key Specifications (One Key:Value per line)
+                </label>
+                <textarea name="specifications_raw" rows="3" placeholder="Size: 25x52x15mm&#10;Material: SS304&#10;Voltage: 1100V" style="width: 100%; font-family: var(--font-mono); font-size: 0.8125rem;"></textarea>
+            </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <a href="/item-master" class="btn btn-secondary">&larr; Cancel</a>
+            <button type="submit" class="btn btn-primary" style="padding: 0.6rem 1.75rem;">
+                Save Product to Catalog &rarr;
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

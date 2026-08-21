@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+
+{% block title %}Quotation: {{ quote.supplier_raw_name if quote else quote_meta.test_name }} — RFQ {{ rfq.rfq_id if rfq else '' }}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb Navigation -->
+<div class="breadcrumb-bar">
+    <div class="breadcrumbs">
+        <a href="/rfqs">RFQs</a>
+        <span class="breadcrumb-separator">/</span>
+        {% if rfq %}
+        <a href="/rfqs/{{ rfq.rfq_id }}">{{ rfq.rfq_id }} &bull; {{ rfq.title }}</a>
+        <span class="breadcrumb-separator">/</span>
+        {% endif %}
+        <span class="breadcrumb-current">{{ quote.supplier_raw_name if quote else quote_meta.test_name }} ({{ quote_meta.test_id }})</span>
+    </div>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+        {% if rfq %}
+        <a href="/rfqs/{{ rfq.rfq_id }}" class="btn btn-secondary btn-sm">&larr; Back to RFQ Workspace</a>
+        {% else %}
+        <a href="/rfqs" class="btn btn-secondary btn-sm">&larr; Back to RFQs</a>
+        {% endif %}
+        {% if quote_meta.status == 'SUCCESS' %}
+        <a href="/quotes/{{ quote_meta.test_id }}/match" class="btn btn-primary btn-sm">
+            Continue to Product Alignment &rarr;
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Compact 5-Step Progression Stepper -->
+<div class="card" style="padding: 0.85rem 1.25rem; margin-bottom: 1.25rem; background: var(--bg-secondary); border: 1px solid var(--border-color);">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+            <!-- Stage 1 -->
+            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; font-weight: 700; color: var(--text-main);">
+                <span class="badge badge-success" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">1</span>
+                <span>RFQ Scope</span>
+            </div>
+            <span style="color: var(--text-subtle);">&rarr;</span>
+
+            <!-- Stage 2 -->
+            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; font-weight: 700; color: var(--accent);">
+                <span class="badge badge-info" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">2</span>
+                <span>Supplier Quote Extracted</span>
+            </div>
+            <span style="color: var(--text-subtle);">&rarr;</span>
+
+            <!-- Stage 3 -->
+            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; color: var(--text-muted);">
+                <span class="badge badge-muted" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">3</span>
+                <span>Review &amp; Matching</span>
+            </div>
+            <span style="color: var(--text-subtle);">&rarr;</span>
+
+            <!-- Stage 4 -->
+            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; color: var(--text-muted);">
+                <span class="badge badge-muted" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">4</span>
+                <span>Comparison</span>
+            </div>
+            <span style="color: var(--text-subtle);">&rarr;</span>
+
+            <!-- Stage 5 -->
+            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; color: var(--text-muted);">
+                <span class="badge badge-muted" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">5</span>
+                <span>Award</span>
+            </div>
+        </div>
+
+        <div>
+            <a href="/quotes/{{ quote_meta.test_id }}/match" class="btn btn-primary btn-sm">
+                Next: Product Identity Alignment &rarr;
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Dominant Page Identity Header -->
+<div class="card" style="background: var(--bg-card); border-top: 3px solid var(--accent); padding: 1.25rem; margin-bottom: 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                <span class="badge badge-info">Supplier Quotation Details</span>
+                {% if quote_meta.has_corrections %}
+                <span class="badge badge-warning">Human Overrides Active</span>
+                {% endif %}
+                {% if rfq %}
+                <code style="color: var(--accent); font-weight: 700; font-size: 0.8125rem;">Target RFQ: {{ rfq.rfq_id }} &bull; {{ rfq.title }}</code>
+                {% endif %}
+                <code style="color: var(--text-muted); font-size: 0.8125rem;">ID: {{ quote_meta.test_id }}</code>
+            </div>
+
+            <h1 style="font-size: 1.4rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.25rem;">
+                {{ quote.supplier_raw_name if quote else quote_meta.test_name }}
+            </h1>
+            <p style="font-size: 0.8125rem; color: var(--text-muted);">
+                Source Document: <strong>{{ quote_meta.source_file_name or '—' }}</strong> &bull; 
+                Quoted Currency: <strong>{{ quote.currency if quote else quote_meta.currency }}</strong> &bull; 
+                Extracted Lines: <strong>{{ quote.items|length if quote else 0 }} items</strong>
+            </p>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            {% if quote_meta.status == 'SUCCESS' %}
+            <a href="/quotes/{{ quote_meta.test_id }}/match" class="btn btn-primary btn-sm">
+                Product Alignment &rarr;
+            </a>
+            {% endif %}
+
+            {% if has_source %}
+            <a href="/quotes/{{ quote_meta.test_id }}/source" target="_blank" class="btn btn-secondary btn-sm" title="View source in browser">View Source</a>
+            <a href="/quotes/{{ quote_meta.test_id }}/download" class="btn btn-secondary btn-sm" title="Download source document">Download File</a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Main Split Container: Left (Document & Summary) | Right (Extracted Data) -->
+<div style="display: grid; grid-template-columns: 360px 1fr; gap: 1.25rem; align-items: start;">
+
+    <!-- Left Column: Source Document & Reconciliation Summary -->
+    <div>
+        <div class="card" style="border-top: 3px solid var(--accent);">
+            <div class="card-header">
+                <div class="card-title">Quotation Summary</div>
+            </div>
+
+            <div style="background: var(--bg-card-subtle); padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 1rem; font-size: 0.8125rem;">
+                <div style="margin-bottom: 0.35rem; display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-muted);">Supplier:</span>
+                    <strong>{{ quote.supplier_raw_name if quote else '—' }}</strong>
+                </div>
+                <div style="margin-bottom: 0.35rem; display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-muted);">Document File:</span>
+                    <strong style="color: var(--accent); word-break: break-all;">{{ quote_meta.source_file_name or '—' }}</strong>
+                </div>
+                <div style="margin-bottom: 0.35rem; display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-muted);">Commercial Terms:</span>
+                    <span>{{ quote.incoterms or 'Standard' }}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-muted);">Extracted Items:</span>
+                    <strong style="font-family: var(--font-mono);">{{ quote.items|length if quote else 0 }} lines</strong>
+                </div>
+            </div>
+
+            {% if rfq_quote_data %}
+            <div style="background: var(--bg-card-subtle); padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 1rem; font-size: 0.8125rem;">
+                <div style="font-weight: 700; margin-bottom: 0.5rem; color: var(--accent);">
+                    Target RFQ Scope Alignment
+                </div>
+                <div style="margin-bottom: 0.35rem; display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-muted);">RFQ Scope Coverage:</span>
+                    <strong style="color: var(--text-main); font-family: var(--font-mono);">
+                        {{ rfq_quote_data.scope_coverage_str }}
+                    </strong>
+                </div>
+                <div style="margin-bottom: 0.35rem; display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-muted);">Applicable RFQ Items:</span>
+                    <strong>{{ rfq_quote_data.rfq_items_matched }} of {{ rfq_quote_data.total_rfq_items }}</strong>
+                </div>
+                <div style="margin-bottom: 0.35rem; display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-muted);">Lines Extracted:</span>
+                    <span>{{ rfq_quote_data.lines_extracted_count }}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-muted);">Extra / Unrequested Lines:</span>
+                    <span>{{ rfq_quote_data.extra_lines_count }}</span>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if report %}
+            <div style="border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
+                <div style="font-weight: 600; font-size: 0.8125rem; margin-bottom: 0.5rem; color: var(--text-muted); text-transform: uppercase;">
+                    Extraction Audit
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.8125rem; margin-bottom: 0.25rem;">
+                    <span style="color: var(--text-muted);">Confidence Score:</span>
+                    <strong>{{ "%.1f"|format(report.overall_confidence * 100) if report.overall_confidence else 100 }}%</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.8125rem;">
+                    <span style="color: var(--text-muted);">Processing Status:</span>
+                    <span class="badge badge-success">{{ report.status or 'EXTRACTED' }}</span>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Right Column: Extracted Line Items -->
+    <div>
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Extracted Quotation Line Items ({{ quote.items|length if quote else 0 }})</div>
+                <div style="font-size: 0.8125rem; color: var(--text-muted);">
+                    Values parsed directly from source document without mutation.
+                </div>
+            </div>
+
+            {% if quote and quote.items %}
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 60px;">#</th>
+                            <th style="min-width: 220px;">Supplier Description</th>
+                            <th style="width: 110px;">Part Number</th>
+                            <th style="width: 100px; text-align: right;">Quoted Qty</th>
+                            <th style="width: 80px;">UOM</th>
+                            <th style="width: 120px; text-align: right;">Unit Price ({{ quote.currency }})</th>
+                            <th style="width: 130px; text-align: right;">Net Line Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in quote.items %}
+                        <tr>
+                            <td><code>{{ item.line_index + 1 }}</code></td>
+                            <td>
+                                <strong style="color: var(--text-main);">{{ item.raw_description }}</strong>
+                            </td>
+                            <td>
+                                <code style="color: var(--accent); font-size: 0.75rem;">{{ item.supplier_part_number or '—' }}</code>
+                            </td>
+                            <td style="text-align: right; font-family: var(--font-mono); font-weight: 600;">
+                                {{ item.quoted_qty }}
+                            </td>
+                            <td>
+                                <span class="badge badge-info">{{ item.quoted_uom }}</span>
+                            </td>
+                            <td style="text-align: right; font-family: var(--font-mono); font-weight: 600;">
+                                {{ item.unit_price }}
+                            </td>
+                            <td style="text-align: right; font-family: var(--font-mono); font-weight: 700; color: var(--text-main);">
+                                {{ "%.2f"|format(item.quoted_qty * item.unit_price) }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                No line items extracted from this quotation file yet.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

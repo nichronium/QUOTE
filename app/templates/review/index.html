@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Procurement Exception Inbox — Quote Intelligence{% endblock %}
+
+{% block content %}
+<div class="breadcrumb-bar">
+    <div class="breadcrumbs">
+        <a href="/rfqs">RFQs</a>
+        <span class="breadcrumb-separator">/</span>
+        {% if rfq %}
+        <a href="/rfqs/{{ rfq.rfq_id }}">{{ rfq.rfq_id }} &bull; {{ rfq.title }}</a>
+        <span class="breadcrumb-separator">/</span>
+        {% endif %}
+        <span class="breadcrumb-current">Procurement Exception Inbox</span>
+    </div>
+    <div>
+        {% if rfq %}
+        <a href="/rfqs/{{ rfq.rfq_id }}" class="btn btn-secondary btn-sm">&larr; Back to RFQ Workspace</a>
+        {% else %}
+        <a href="/rfqs" class="btn btn-secondary btn-sm">&larr; Back to RFQs</a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Dominant Header Card -->
+<div class="card" style="background: var(--bg-card); border-top: 3px solid var(--warning); padding: 1.25rem; margin-bottom: 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                <span class="badge badge-warning">Actionable Review Center</span>
+                {% if rfq %}
+                <code style="color: var(--accent); font-weight: 700; font-size: 0.8125rem;">Target RFQ: {{ rfq.rfq_id }} &bull; {{ rfq.title }}</code>
+                {% endif %}
+            </div>
+            <h1 style="font-size: 1.4rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.25rem;">
+                {% if rfq %}{{ rfq.rfq_id }} &bull; Pending Sourcing Roadblocks{% else %}Procurement Exception Inbox{% endif %}
+            </h1>
+            <p style="font-size: 0.8125rem; color: var(--text-muted);">
+                Actionable roadblocks across quotations: ambiguous product matches, incompatible units of measure, and document discrepancies. Resolving these enables automatic commercial normalization and comparison.
+            </p>
+        </div>
+
+        <div>
+            {% if rfq %}
+            <a href="/rfqs/{{ rfq.rfq_id }}" class="btn btn-primary btn-sm">
+                &larr; Back to RFQ Workspace
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="card" style="border-top: 3px solid var(--warning);">
+    <div class="card-header">
+        <div class="card-title" style="font-size: 0.9375rem;">Pending Sourcing Roadblocks ({{ issues|length }})</div>
+    </div>
+
+    {% if issues %}
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 100px;">Severity</th>
+                    <th style="width: 130px;">RFQ Reference</th>
+                    <th style="width: 180px;">Supplier / Quotation</th>
+                    <th style="min-width: 180px;">Item Quoted</th>
+                    <th style="min-width: 240px;">Exception Description</th>
+                    <th style="width: 120px; text-align: right;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for issue in issues %}
+                <tr>
+                    <td>
+                        {% if issue.severity == 'CRITICAL' %}
+                            <span class="badge badge-danger">CRITICAL</span>
+                        {% elif issue.severity == 'WARNING' %}
+                            <span class="badge badge-warning">WARNING</span>
+                        {% else %}
+                            <span class="badge badge-info">{{ issue.severity }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <code style="color: var(--accent); font-weight: 700; font-size: 0.8125rem;">
+                            {{ issue.rfq_id or '—' }}
+                        </code>
+                    </td>
+                    <td>
+                        <strong style="color: var(--text-main);">{{ issue.supplier or issue.supplier_name or '—' }}</strong>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono);">
+                            {{ issue.quote_id }}
+                        </div>
+                    </td>
+                    <td>
+                        <strong style="color: var(--text-main);">{{ issue.description or '—' }}</strong>
+                        {% if issue.line_index is not none %}
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">
+                            Line #{{ issue.line_index + 1 }}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="color: var(--text-main); font-weight: 600; font-size: 0.8125rem;">
+                            {{ (issue.type or issue.issue_type or 'Issue').replace('_', ' ').title() }}
+                        </div>
+                        <div style="color: var(--text-muted); font-size: 0.75rem; margin-top: 0.15rem;">
+                            {{ issue.message or issue.description }}
+                        </div>
+                    </td>
+                    <td style="text-align: right;">
+                        <a href="{{ issue.link or issue.action_url }}" class="btn btn-primary btn-sm" style="font-size: 0.75rem; padding: 0.25rem 0.65rem;">
+                            Resolve &rarr;
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="text-align: center; padding: 2.5rem 1rem; color: var(--text-muted);">
+        <h4 style="font-size: 1rem; color: var(--text-main); margin-bottom: 0.25rem;">All Quotations Clean &amp; Resolved</h4>
+        <p style="font-size: 0.8125rem; max-width: 480px; margin: 0 auto 1rem auto;">
+            No pending exceptions found. All uploaded supplier quotations have valid identity alignments and are ready for commercial comparison.
+        </p>
+        {% if rfq %}
+        <a href="/rfqs/{{ rfq.rfq_id }}" class="btn btn-primary btn-sm">&larr; Return to RFQ Workspace</a>
+        {% else %}
+        <a href="/rfqs" class="btn btn-primary btn-sm">&larr; Return to RFQ Hub</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

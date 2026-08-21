@@ -1,0 +1,85 @@
+"""
+Matching Domain Contracts & Data Models.
+Exposes stable schemas for RFQ Lines, Item Master Records, Match Candidates,
+UOM Conversion Results, and MatchedQuoteItems.
+INVARIANT: Original extracted QuoteItem data is NEVER warped or overwritten.
+"""
+
+from decimal import Decimal
+from enum import Enum
+from typing import Dict, List, Optional, Set, Tuple
+from pydantic import BaseModel, Field
+
+from core.canonical_quote import Provenance, QuoteItem
+
+
+class MatchStatus(str, Enum):
+    EXACT_MATCH = "EXACT_MATCH"
+    HIGH_CONFIDENCE_MATCH = "HIGH_CONFIDENCE_MATCH"
+    REVIEW_REQUIRED = "REVIEW_REQUIRED"
+    UNMATCHED = "UNMATCHED"
+    UOM_INCOMPATIBLE = "UOM_INCOMPATIBLE"
+
+
+
+class MatchMethod(str, Enum):
+    SUPPLIER_SKU_EXACT = "SUPPLIER_SKU_EXACT"
+    MANUFACTURER_PN_EXACT = "MANUFACTURER_PN_EXACT"
+    INTERNAL_SKU_EXACT = "INTERNAL_SKU_EXACT"
+    FUZZY_DESCRIPTION_MULTI_SIGNAL = "FUZZY_DESCRIPTION_MULTI_SIGNAL"
+    NO_MATCH = "NO_MATCH"
+
+
+class RFQLineItem(BaseModel):
+    rfq_line_id: str
+    internal_item_id: Optional[str] = None
+    sku: Optional[str] = None
+    description: str
+    requested_quantity: Decimal = Field(gt=Decimal("0.0"))
+    requested_uom: str
+    target_unit_price: Optional[Decimal] = None
+    approved_uom_conversions: Dict[str, Decimal] = Field(default_factory=dict)
+
+
+class ItemMasterRecord(BaseModel):
+    internal_item_id: str
+    internal_sku: str
+    manufacturer_part_number: Optional[str] = None
+    approved_supplier_part_numbers: List[str] = Field(default_factory=list)
+    canonical_description: str
+    stocking_uom: str
+    approved_conversion_factors: Dict[str, Decimal] = Field(default_factory=dict)
+    brand: Optional[str] = None
+    specifications: Dict[str, str] = Field(default_factory=dict)
+
+
+class MatchCandidate(BaseModel):
+    candidate_item_id: str
+    candidate_sku: str
+    candidate_description: str
+    match_method: MatchMethod
+    match_score: float = Field(ge=0.0, le=1.0)
+    match_status: MatchStatus
+    explanations: List[str] = Field(default_factory=list)
+    matched_fields: List[str] = Field(default_factory=list)
+    source_provenance: Optional[Provenance] = None
+
+
+class UOMConversionResult(BaseModel):
+    is_compatible: bool
+    conversion_factor: Decimal = Decimal("1.0")
+    converted_quantity: Optional[Decimal] = None
+    source_uom: str
+    target_uom: str
+    conversion_method: str   # "STANDARD_DIMENSION" | "ITEM_MASTER_FACTOR" | "INCOMPATIBLE"
+    error_reason: Optional[str] = None
+
+
+class MatchedQuoteItem(BaseModel):
+    quote_item: QuoteItem                             # Original extracted item (never mutated)
+    rfq_match: Optional[MatchCandidate] = None
+    item_master_match: Optional[MatchCandidate] = None
+    uom_conversion: Optional[UOMConversionResult] = None
+    match_status: MatchStatus = MatchStatus.UNMATCHED
+    review_reasons: List[str] = Field(default_factory=list)
+    top_candidates: List[MatchCandidate] = Field(default_factory=list)

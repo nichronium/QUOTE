@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+
+{% block title %}Procurement Analytics &amp; Sourcing Intelligence — Quote Intelligence{% endblock %}
+
+{% block content %}
+<!-- Page Identity Header -->
+<div class="breadcrumb-bar">
+    <div class="breadcrumbs">
+        <a href="/">Home</a>
+        <span class="breadcrumb-separator">/</span>
+        <span class="breadcrumb-current">Procurement Analytics &amp; Pipeline Insights</span>
+    </div>
+    <div>
+        <a href="/rfqs/create" class="btn btn-primary btn-sm">+ Create RFQ</a>
+    </div>
+</div>
+
+<div style="margin-bottom: 1.5rem;">
+    <h1 style="font-size: 1.5rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.25rem;">
+        Procurement Analytics &amp; Sourcing Intelligence
+    </h1>
+    <p style="font-size: 0.8125rem; color: var(--text-muted);">
+        Executive overview of active sourcing rounds, supplier quotation volumes, evaluation milestones, and finalized award commitments.
+    </p>
+</div>
+
+<!-- 1. Top Executive KPIs Grid -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+    <!-- Active RFQs -->
+    <div class="card" style="padding: 1.25rem; margin-bottom: 0; border-top: 3px solid var(--accent);">
+        <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.35rem;">
+            Procurement RFQs
+        </div>
+        <div style="font-size: 1.75rem; font-weight: 800; color: var(--text-main); font-family: var(--font-mono); line-height: 1.1;">
+            {{ total_rfqs }}
+        </div>
+        <div style="font-size: 0.75rem; color: var(--accent); margin-top: 0.35rem;">
+            Active rounds in pipeline
+        </div>
+    </div>
+
+    <!-- Supplier Quotes Ingested -->
+    <div class="card" style="padding: 1.25rem; margin-bottom: 0; border-top: 3px solid #0ea5e9;">
+        <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.35rem;">
+            Quotations Ingested
+        </div>
+        <div style="font-size: 1.75rem; font-weight: 800; color: var(--text-main); font-family: var(--font-mono); line-height: 1.1;">
+            {{ total_quotes }}
+        </div>
+        <div style="font-size: 0.75rem; color: #0ea5e9; margin-top: 0.35rem;">
+            Extracted &amp; reconciled
+        </div>
+    </div>
+
+    <!-- Commercial Comparisons -->
+    <div class="card" style="padding: 1.25rem; margin-bottom: 0; border-top: 3px solid #8b5cf6;">
+        <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.35rem;">
+            Evaluations Run
+        </div>
+        <div style="font-size: 1.75rem; font-weight: 800; color: var(--text-main); font-family: var(--font-mono); line-height: 1.1;">
+            {{ total_comparisons }}
+        </div>
+        <div style="font-size: 0.75rem; color: #8b5cf6; margin-top: 0.35rem;">
+            Landed cost matrices
+        </div>
+    </div>
+
+    <!-- Finalized Awards -->
+    <div class="card" style="padding: 1.25rem; margin-bottom: 0; border-top: 3px solid var(--success);">
+        <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.35rem;">
+            Finalized Awards
+        </div>
+        <div style="font-size: 1.75rem; font-weight: 800; color: var(--success); font-family: var(--font-mono); line-height: 1.1;">
+            {{ total_awards }}
+        </div>
+        <div style="font-size: 0.75rem; color: var(--success); margin-top: 0.35rem;">
+            Total Value: ₹{{ total_awarded_val }}
+        </div>
+    </div>
+
+    <!-- Item Master Catalog Size -->
+    <div class="card" style="padding: 1.25rem; margin-bottom: 0; border-top: 3px solid #f59e0b;">
+        <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.35rem;">
+            Item Master Catalog
+        </div>
+        <div style="font-size: 1.75rem; font-weight: 800; color: var(--text-main); font-family: var(--font-mono); line-height: 1.1;">
+            {{ total_catalog_items }}
+        </div>
+        <div style="font-size: 0.75rem; color: #f59e0b; margin-top: 0.35rem;">
+            Standard company SKUs
+        </div>
+    </div>
+</div>
+
+<!-- 2. Sourcing Pipeline Funnel & Stage Distribution -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem;">
+    <!-- Sourcing Lifecycle Stages -->
+    <div class="card" style="margin-bottom: 0;">
+        <div class="card-header">
+            <div>
+                <div class="card-title">Sourcing Pipeline by Stage</div>
+                <div style="font-size: 0.8125rem; color: var(--text-muted);">
+                    Distribution of procurement rounds across the 5 workflow stages
+                </div>
+            </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            <!-- Stage 1 / Draft -->
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.65rem 0.85rem; background: var(--bg-card-subtle); border-radius: 8px; border: 1px solid var(--border-color);">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="badge badge-muted">Stage 1</span>
+                    <span style="font-weight: 600; font-size: 0.875rem;">Draft / Scope Definition</span>
+                </div>
+                <strong style="font-family: var(--font-mono); font-size: 0.9375rem;">{{ status_counts.DRAFT }}</strong>
+            </div>
+
+            <!-- Stage 2 / Quotes Pending -->
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.65rem 0.85rem; background: var(--bg-card-subtle); border-radius: 8px; border: 1px solid var(--border-color);">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="badge badge-info">Stage 2</span>
+                    <span style="font-weight: 600; font-size: 0.875rem;">Quotation Collection</span>
+                </div>
+                <strong style="font-family: var(--font-mono); font-size: 0.9375rem;">{{ status_counts.QUOTES_PENDING }}</strong>
+            </div>
+
+            <!-- Stage 3 / Review Required -->
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.65rem 0.85rem; background: var(--bg-card-subtle); border-radius: 8px; border: 1px solid var(--border-color);">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="badge badge-warning">Stage 3</span>
+                    <span style="font-weight: 600; font-size: 0.875rem;">Matching &amp; Product Review</span>
+                </div>
+                <strong style="font-family: var(--font-mono); font-size: 0.9375rem; color: var(--warning);">{{ status_counts.MATCHING_REVIEW }}</strong>
+            </div>
+
+            <!-- Stage 4 / Ready to Compare & Evaluated -->
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.65rem 0.85rem; background: var(--bg-card-subtle); border-radius: 8px; border: 1px solid var(--border-color);">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="badge badge-purple">Stage 4</span>
+                    <span style="font-weight: 600; font-size: 0.875rem;">Commercial Comparison / Evaluated</span>
+                </div>
+                <strong style="font-family: var(--font-mono); font-size: 0.9375rem; color: var(--purple);">{{ status_counts.READY_FOR_COMPARISON + status_counts.EVALUATED }}</strong>
+            </div>
+
+            <!-- Stage 5 / Award Finalized -->
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.65rem 0.85rem; background: var(--bg-card-subtle); border-radius: 8px; border: 1px solid var(--border-color);">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="badge badge-success">Stage 5</span>
+                    <span style="font-weight: 600; font-size: 0.875rem;">Award Decision Finalized</span>
+                </div>
+                <strong style="font-family: var(--font-mono); font-size: 0.9375rem; color: var(--success);">{{ status_counts.AWARD_FINALIZED }}</strong>
+            </div>
+        </div>
+    </div>
+
+    <!-- Currency & Normalization Engine Metrics -->
+    <div class="card" style="margin-bottom: 0;">
+        <div class="card-header">
+            <div>
+                <div class="card-title">Commercial &amp; Currency Exposure</div>
+                <div style="font-size: 0.8125rem; color: var(--text-muted);">
+                    Multi-currency quotation coverage and ECB rate tracking
+                </div>
+            </div>
+        </div>
+
+        <div style="background: var(--bg-card-subtle); border-radius: 8px; border: 1px solid var(--border-color); padding: 1rem; margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <span style="font-size: 0.8125rem; color: var(--text-muted);">Active Source Currencies:</span>
+                <div style="display: flex; gap: 0.35rem;">
+                    {% for c in currencies_list %}
+                    <span class="badge badge-info">{{ c }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.4;">
+                All cross-border supplier quotations are converted to RFQ base currencies using European Central Bank authoritative exchange rates with Decimal precision.
+            </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.8125rem;">
+                <span style="color: var(--text-muted);">Arithmetic Precision Engine:</span>
+                <span class="badge badge-success">Pure Decimal Arithmetic</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.8125rem;">
+                <span style="color: var(--text-muted);">Document Provenance Engine:</span>
+                <span class="badge badge-info">Cell-Level Provenance Active</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.8125rem;">
+                <span style="color: var(--text-muted);">Split-Sourcing Optimization:</span>
+                <span class="badge badge-purple">Line-Item Combinatorial Matrix</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 3. Recent Sourcing Decisions & Activity -->
+<div class="card">
+    <div class="card-header">
+        <div>
+            <div class="card-title">Recent Commercial Evaluations</div>
+            <div style="font-size: 0.8125rem; color: var(--text-muted);">
+                Latest multi-supplier comparisons and ranking evaluations
+            </div>
+        </div>
+        <a href="/comparisons" class="btn btn-secondary btn-sm">View All Evaluations &rarr;</a>
+    </div>
+
+    {% if recent_comparisons and recent_comparisons|length > 0 %}
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Comparison Reference</th>
+                    <th>RFQ Target</th>
+                    <th>Suppliers Evaluated</th>
+                    <th>L1 Ranked Supplier</th>
+                    <th>Evaluated Landed Cost</th>
+                    <th style="text-align: right;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in recent_comparisons %}
+                <tr>
+                    <td><code>{{ c.comparison_id }}</code></td>
+                    <td><strong style="color: var(--accent);">{{ c.rfq_id }}</strong></td>
+                    <td>{{ c.supplier_count }} suppliers</td>
+                    <td><strong style="color: var(--success);">{{ c.l1_supplier }}</strong></td>
+                    <td style="font-family: var(--font-mono); font-weight: 600;">
+                        {{ c.base_currency }} {{ c.l1_landed_cost }}
+                    </td>
+                    <td style="text-align: right;">
+                        <a href="/comparisons/{{ c.comparison_id }}" class="btn btn-primary btn-sm">
+                            Open Matrix &rarr;
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
+        No commercial evaluations run yet. Create an RFQ and upload supplier quotes to see live analytics.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

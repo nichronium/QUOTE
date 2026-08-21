@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Procurement Audit History — Quote Intelligence{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+        <div>
+            <h1 style="font-size: 1.25rem; font-weight: 700;">📜 Procurement Audit History</h1>
+            <p style="font-size: 0.8125rem; color: var(--text-muted);">
+                Chronological ledger of all supplier document extractions, metrics, overrides, and reconciliation states.
+            </p>
+        </div>
+
+        <div>
+            <input type="text" id="history-search" placeholder="🔍 Search quotes, suppliers, files..." onkeyup="filterHistory();" style="max-width: 320px;">
+        </div>
+    </div>
+
+    {% if quotes %}
+    <table id="history-table">
+        <thead>
+            <tr>
+                <th>Quote ID</th>
+                <th>Supplier / Quote Name</th>
+                <th>Source File</th>
+                <th>Lines</th>
+                <th>Avg Confidence</th>
+                <th>Landed Cost</th>
+                <th>Status</th>
+                <th>Last Updated</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for q in quotes %}
+            <tr>
+                <td><code style="color: var(--accent); font-weight: 700;">{{ q.test_id }}</code></td>
+                <td>
+                    <a href="/quotes/{{ q.test_id }}" style="color: var(--text-main); font-weight: 600; text-decoration: none;">
+                        {{ q.supplier_name if q.supplier_name != '—' else q.test_name }}
+                    </a>
+                    {% if q.supplier_name != '—' and q.test_name %}
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">{{ q.test_name }}</div>
+                    {% endif %}
+                    {% if q.has_corrections %}
+                        <span class="badge badge-info" style="font-size: 0.625rem; margin-top: 0.2rem;">Human Overrides</span>
+                    {% endif %}
+                </td>
+
+                <td style="font-size: 0.75rem; color: var(--text-muted);">{{ q.source_file_name or "—" }}</td>
+                <td>{{ q.line_count or "—" }}</td>
+                <td>
+                    {% if q.average_confidence %}
+                        <span class="badge {% if q.average_confidence >= 0.85 %}badge-success{% elif q.average_confidence >= 0.7 %}badge-warning{% else %}badge-danger{% endif %}">
+                            {{ (q.average_confidence * 100)|round|int }}%
+                        </span>
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td style="font-family: var(--font-mono); font-size: 0.8125rem;">
+                    {% if q.total_landed_cost != '—' %}
+                        {{ q.currency }} {{ q.total_landed_cost }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td>
+                    {% if q.status == 'SUCCESS' %}
+                        <span class="badge badge-success">Extracted</span>
+                    {% elif q.status == 'FAILED' %}
+                        <span class="badge badge-danger">Failed</span>
+                    {% elif q.status == 'READY' %}
+                        <span class="badge badge-warning">Uploaded</span>
+                    {% else %}
+                        <span class="badge badge-muted">Draft</span>
+                    {% endif %}
+                </td>
+                <td style="font-size: 0.75rem; color: var(--text-muted);">
+                    {{ q.created_at[:19] if q.created_at else "—" }}
+                </td>
+                <td>
+                    <a href="/quotes/{{ q.test_id }}" class="btn btn-secondary btn-sm">Open &rarr;</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
+        <p>No procurement history records available.</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    function filterHistory() {
+        const input = document.getElementById('history-search');
+        const filter = input.value.toLowerCase();
+        const table = document.getElementById('history-table');
+        if (!table) return;
+        const trs = table.getElementsByTagName('tr');
+
+        for (let i = 1; i < trs.length; i++) {
+            const tr = trs[i];
+            const text = tr.innerText.toLowerCase();
+            if (text.indexOf(filter) > -1) {
+                tr.style.display = '';
+            } else {
+                tr.style.display = 'none';
+            }
+        }
+    }
+</script>
+{% endblock %}\n

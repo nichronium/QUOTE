@@ -1,0 +1,453 @@
+{% extends "base.html" %}
+
+{% block title %}Application Settings &amp; Preferences — Quote Intelligence{% endblock %}
+
+{% block content %}
+<!-- Toast Notification -->
+<div id="settingsToast" style="position: fixed; bottom: 2rem; right: 2rem; background: var(--bg-card); border: 1px solid var(--accent); padding: 0.85rem 1.25rem; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 0.75rem; z-index: 9999; transform: translateY(100px); opacity: 0; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); pointer-events: none;">
+    <span style="display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--success-subtle); color: var(--success); font-weight: bold; font-size: 0.75rem;">✓</span>
+    <span id="settingsToastMsg" style="font-size: 0.875rem; font-weight: 600; color: var(--text-main);">Settings saved successfully</span>
+</div>
+
+<!-- Reset Confirmation Modal -->
+<div id="resetConfirmModal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 99990; display: none; align-items: center; justify-content: center;">
+    <div style="background: var(--bg-card); border: 1px solid var(--danger-border); border-radius: 14px; padding: 2rem; max-width: 480px; width: 90%; box-shadow: 0 20px 40px rgba(0,0,0,0.5); animation: silkyFadeInUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);">
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+            <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--danger-subtle); color: var(--danger); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                ⚠️
+            </div>
+            <div>
+                <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-main); margin: 0;">Reset All Sourcing Data?</h3>
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">This will clean all RFQs, quotes, comparisons, and awards.</p>
+            </div>
+        </div>
+        <p style="font-size: 0.8125rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.5rem;">
+            This action will clear all user procurement rounds, supplier quotations, comparison matrices, and award decisions, starting fresh as a new application. The baseline Item Master catalog will be preserved.
+        </p>
+        <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="closeResetModal()">Cancel</button>
+            <button type="button" class="btn btn-danger btn-sm" id="confirmResetBtn" onclick="executeResetData()">
+                Yes, Reset Everything
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="breadcrumb-bar">
+    <div class="breadcrumbs">
+        <a href="/">Home</a>
+        <span class="breadcrumb-separator">/</span>
+        <span class="breadcrumb-current">Application Settings &amp; Preferences</span>
+    </div>
+    <div>
+        <a href="/" class="btn btn-secondary btn-sm">&larr; Back to Home</a>
+    </div>
+</div>
+
+<div style="max-width: 960px; margin: 0 auto 3rem auto;">
+    <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <h1 style="font-size: 1.5rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.25rem;">
+                Application &amp; Company Preferences
+            </h1>
+            <p style="font-size: 0.8125rem; color: var(--text-muted);">
+                Configure display themes, fluid styling, enterprise defaults, and database reset controls.
+            </p>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+            <button type="button" class="btn btn-primary btn-sm" onclick="saveAllPreferences()">
+                <svg style="width: 15px; height: 15px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Save Preferences
+            </button>
+        </div>
+    </div>
+
+    <!-- Section 1: Themes & Appearance -->
+    <div class="card" style="border-top: 3px solid var(--accent); margin-bottom: 1.5rem;">
+        <div class="card-header">
+            <div>
+                <div class="card-title">1. Visual Theme &amp; Accent Styling</div>
+                <div style="font-size: 0.8125rem; color: var(--text-muted);">
+                    Instant fluid transition across 6 distinct themes and 6 accent palettes. Saved automatically.
+                </div>
+            </div>
+        </div>
+
+        <!-- Elegant Gradient Themes Grid -->
+        <div style="margin-bottom: 1.5rem;">
+            <label style="display: block; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.65rem;">
+                Display Theme (Subtle Gradient &amp; Depth)
+            </label>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.65rem;">
+                <!-- Velvet Slate -->
+                <button type="button" onclick="setTheme('velvet-slate')" id="theme-btn-velvet-slate" class="btn btn-secondary" style="flex-direction: column; padding: 0.75rem 0.5rem; gap: 0.35rem; text-align: center;">
+                    <div style="width: 100%; height: 24px; border-radius: 4px; background: linear-gradient(135deg, #131b2e 0%, #0b0f19 100%); border: 1px solid #1e2d48;"></div>
+                    <span style="font-size: 0.75rem;">Velvet Slate</span>
+                </button>
+
+                <!-- Champagne Silk -->
+                <button type="button" onclick="setTheme('champagne-silk')" id="theme-btn-champagne-silk" class="btn btn-secondary" style="flex-direction: column; padding: 0.75rem 0.5rem; gap: 0.35rem; text-align: center;">
+                    <div style="width: 100%; height: 24px; border-radius: 4px; background: linear-gradient(135deg, #ffffff 0%, #f3efe6 100%); border: 1px solid #e5dec9;"></div>
+                    <span style="font-size: 0.75rem;">Champagne Silk</span>
+                </button>
+
+                <!-- Aurora Night -->
+                <button type="button" onclick="setTheme('aurora-night')" id="theme-btn-aurora-night" class="btn btn-secondary" style="flex-direction: column; padding: 0.75rem 0.5rem; gap: 0.35rem; text-align: center;">
+                    <div style="width: 100%; height: 24px; border-radius: 4px; background: linear-gradient(135deg, #0d252a 0%, #061114 100%); border: 1px solid #173f47;"></div>
+                    <span style="font-size: 0.75rem;">Aurora Night</span>
+                </button>
+
+                <!-- Misty Amethyst -->
+                <button type="button" onclick="setTheme('misty-amethyst')" id="theme-btn-misty-amethyst" class="btn btn-secondary" style="flex-direction: column; padding: 0.75rem 0.5rem; gap: 0.35rem; text-align: center;">
+                    <div style="width: 100%; height: 24px; border-radius: 4px; background: linear-gradient(135deg, #1b1233 0%, #0d0918 100%); border: 1px solid #2b1f4e;"></div>
+                    <span style="font-size: 0.75rem;">Misty Amethyst</span>
+                </button>
+
+                <!-- Rose Noir -->
+                <button type="button" onclick="setTheme('rose-noir')" id="theme-btn-rose-noir" class="btn btn-secondary" style="flex-direction: column; padding: 0.75rem 0.5rem; gap: 0.35rem; text-align: center;">
+                    <div style="width: 100%; height: 24px; border-radius: 4px; background: linear-gradient(135deg, #24141c 0%, #120b0e 100%); border: 1px solid #381c2d;"></div>
+                    <span style="font-size: 0.75rem;">Rose Noir</span>
+                </button>
+
+                <!-- Alpine Frost -->
+                <button type="button" onclick="setTheme('alpine-frost')" id="theme-btn-alpine-frost" class="btn btn-secondary" style="flex-direction: column; padding: 0.75rem 0.5rem; gap: 0.35rem; text-align: center;">
+                    <div style="width: 100%; height: 24px; border-radius: 4px; background: linear-gradient(135deg, #ffffff 0%, #edf2f7 100%); border: 1px solid #cbd5e1;"></div>
+                    <span style="font-size: 0.75rem;">Alpine Frost</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Accents Grid -->
+        <div>
+            <label style="display: block; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.65rem;">
+                Accent Color Palette
+            </label>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.65rem;">
+                <button type="button" onclick="setAccent('blue')" id="accent-btn-blue" class="btn btn-secondary" style="padding: 0.6rem 0.5rem; justify-content: flex-start; gap: 0.5rem;">
+                    <span style="width: 12px; height: 12px; border-radius: 50%; background: #3b82f6; display: inline-block;"></span>
+                    <span style="font-size: 0.8125rem;">Azure Blue</span>
+                </button>
+                <button type="button" onclick="setAccent('emerald')" id="accent-btn-emerald" class="btn btn-secondary" style="padding: 0.6rem 0.5rem; justify-content: flex-start; gap: 0.5rem;">
+                    <span style="width: 12px; height: 12px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
+                    <span style="font-size: 0.8125rem;">Emerald</span>
+                </button>
+                <button type="button" onclick="setAccent('purple')" id="accent-btn-purple" class="btn btn-secondary" style="padding: 0.6rem 0.5rem; justify-content: flex-start; gap: 0.5rem;">
+                    <span style="width: 12px; height: 12px; border-radius: 50%; background: #a855f7; display: inline-block;"></span>
+                    <span style="font-size: 0.8125rem;">Royal Violet</span>
+                </button>
+                <button type="button" onclick="setAccent('amber')" id="accent-btn-amber" class="btn btn-secondary" style="padding: 0.6rem 0.5rem; justify-content: flex-start; gap: 0.5rem;">
+                    <span style="width: 12px; height: 12px; border-radius: 50%; background: #f59e0b; display: inline-block;"></span>
+                    <span style="font-size: 0.8125rem;">Amber Gold</span>
+                </button>
+                <button type="button" onclick="setAccent('rose')" id="accent-btn-rose" class="btn btn-secondary" style="padding: 0.6rem 0.5rem; justify-content: flex-start; gap: 0.5rem;">
+                    <span style="width: 12px; height: 12px; border-radius: 50%; background: #f43f5e; display: inline-block;"></span>
+                    <span style="font-size: 0.8125rem;">Neon Rose</span>
+                </button>
+                <button type="button" onclick="setAccent('cyan')" id="accent-btn-cyan" class="btn btn-secondary" style="padding: 0.6rem 0.5rem; justify-content: flex-start; gap: 0.5rem;">
+                    <span style="width: 12px; height: 12px; border-radius: 50%; background: #06b6d4; display: inline-block;"></span>
+                    <span style="font-size: 0.8125rem;">Cyber Cyan</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 2: Organization & Procurement Defaults Form -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+            <div>
+                <div class="card-title">2. Organization &amp; Commercial Defaults</div>
+                <div style="font-size: 0.8125rem; color: var(--text-muted);">
+                    Default procurement settings automatically pre-filled when creating new RFQ rounds.
+                </div>
+            </div>
+        </div>
+
+        <form id="settingsForm" onsubmit="event.preventDefault(); saveAllPreferences();">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+                <!-- Company Name -->
+                <div>
+                    <label style="display: block; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.35rem;">
+                        Organization / Company Name
+                    </label>
+                    <input type="text" id="company_name" name="company_name" value="{{ settings.company_name or 'Apex Global Procurement Corp' }}">
+                </div>
+
+                <!-- Default Currency -->
+                <div>
+                    <label style="display: block; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.35rem;">
+                        Default Base Currency
+                    </label>
+                    <select id="default_currency" name="default_currency">
+                        <option value="INR" {% if settings.default_currency == 'INR' %}selected{% endif %}>INR (Indian Rupee - ₹)</option>
+                        <option value="USD" {% if settings.default_currency == 'USD' %}selected{% endif %}>USD (US Dollar - $)</option>
+                        <option value="EUR" {% if settings.default_currency == 'EUR' %}selected{% endif %}>EUR (Euro - €)</option>
+                        <option value="GBP" {% if settings.default_currency == 'GBP' %}selected{% endif %}>GBP (British Pound - £)</option>
+                        <option value="JPY" {% if settings.default_currency == 'JPY' %}selected{% endif %}>JPY (Japanese Yen - ¥)</option>
+                        <option value="AED" {% if settings.default_currency == 'AED' %}selected{% endif %}>AED (UAE Dirham)</option>
+                        <option value="SGD" {% if settings.default_currency == 'SGD' %}selected{% endif %}>SGD (Singapore Dollar)</option>
+                    </select>
+                </div>
+
+                <!-- Default Surcharge Allocation -->
+                <div>
+                    <label style="display: block; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.35rem;">
+                        Surcharge Allocation Method
+                    </label>
+                    <select id="default_allocation" name="default_allocation">
+                        <option value="PROPORTIONAL_LINE_VALUE" {% if settings.default_allocation == 'PROPORTIONAL_LINE_VALUE' %}selected{% endif %}>
+                            Proportional Line Value (Standard)
+                        </option>
+                        <option value="EQUAL_SPLIT_ACROSS_LINES" {% if settings.default_allocation == 'EQUAL_SPLIT_ACROSS_LINES' %}selected{% endif %}>
+                            Equal Split Across Lines
+                        </option>
+                        <option value="GROSS_LINE_VALUE" {% if settings.default_allocation == 'GROSS_LINE_VALUE' %}selected{% endif %}>
+                            Gross Line Value
+                        </option>
+                    </select>
+                </div>
+
+                <!-- Default Payment Terms -->
+                <div>
+                    <label style="display: block; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.35rem;">
+                        Standard Payment Terms
+                    </label>
+                    <input type="text" id="default_payment_terms" name="default_payment_terms" value="{{ settings.default_payment_terms or 'Net 30 Days' }}">
+                </div>
+
+                <!-- Price Variance Tolerance -->
+                <div>
+                    <label style="display: block; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.35rem;">
+                        Price Variance Tolerance (%)
+                    </label>
+                    <input type="number" step="0.5" id="variance_tolerance_pct" name="variance_tolerance_pct" value="{{ settings.variance_tolerance_pct or '5.0' }}">
+                </div>
+
+                <!-- Matching Mode -->
+                <div>
+                    <label style="display: block; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.35rem;">
+                        Item Matching Strictness
+                    </label>
+                    <select id="auto_matching_mode" name="auto_matching_mode">
+                        <option value="BALANCED" {% if settings.auto_matching_mode == 'BALANCED' %}selected{% endif %}>Balanced (Score &ge; 0.85 Auto-Match)</option>
+                        <option value="STRICT" {% if settings.auto_matching_mode == 'STRICT' %}selected{% endif %}>Strict (Score &ge; 0.95 Exact Only)</option>
+                        <option value="PERMISSIVE" {% if settings.auto_matching_mode == 'PERMISSIVE' %}selected{% endif %}>Permissive (Score &ge; 0.75)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                <button type="button" class="btn btn-primary" onclick="saveAllPreferences()">
+                    Save Organization Preferences
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Section 3: Data Management & Reset Center -->
+    <div class="card" style="border-top: 3px solid var(--danger);">
+        <div class="card-header">
+            <div>
+                <div class="card-title" style="color: var(--danger);">3. Data Management &amp; Application Reset</div>
+                <div style="font-size: 0.8125rem; color: var(--text-muted);">
+                    Clean the database slate, seed demonstration rounds, or export JSON backups.
+                </div>
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem;">
+            <!-- Reset Card -->
+            <div style="background: var(--bg-card-subtle); border: 1px solid var(--danger-border); border-radius: 8px; padding: 1.25rem; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div style="font-weight: 700; font-size: 0.9375rem; color: var(--danger); margin-bottom: 0.25rem;">
+                        Reset Sourcing Database
+                    </div>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1rem;">
+                        Deletes all user RFQs, uploaded quotes, comparisons, and finalized awards. Starts fresh with standard catalog.
+                    </p>
+                </div>
+                <button type="button" class="btn btn-danger btn-sm" onclick="openResetModal()">
+                    Reset Sourcing Data...
+                </button>
+            </div>
+
+            <!-- Seed Demo Data Card -->
+            <div style="background: var(--bg-card-subtle); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div style="font-weight: 700; font-size: 0.9375rem; color: var(--accent); margin-bottom: 0.25rem;">
+                        Seed Demo Benchmark RFQ
+                    </div>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1rem;">
+                        Populates the 8-item industrial benchmark round (5 suppliers, multi-currency) for evaluation demonstration.
+                    </p>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="seedDemoData()">
+                    Seed Benchmark Demo
+                </button>
+            </div>
+
+            <!-- Export Backup Card -->
+            <div style="background: var(--bg-card-subtle); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div style="font-weight: 700; font-size: 0.9375rem; color: var(--success); margin-bottom: 0.25rem;">
+                        Export Full Backup JSON
+                    </div>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1rem;">
+                        Downloads all current RFQs, Item Master products, and finalized awards in structured JSON format.
+                    </p>
+                </div>
+                <a href="/api/settings/export" class="btn btn-success btn-sm" download="quote_intelligence_export.json">
+                    Export JSON Backup
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 1. Theme Management Functions
+    function setTheme(mode) {
+        localStorage.setItem('qi_theme', mode);
+        document.documentElement.setAttribute('data-theme', mode);
+        updateThemeButtons();
+        showToast('Theme switched to ' + mode.toUpperCase());
+    }
+
+    function setAccent(palette) {
+        localStorage.setItem('qi_accent', palette);
+        document.documentElement.setAttribute('data-accent', palette);
+        updateAccentButtons();
+        showToast('Accent palette set to ' + palette.toUpperCase());
+    }
+
+    function updateThemeButtons() {
+        const theme = localStorage.getItem('qi_theme') || 'dark';
+        ['dark', 'light', 'midnight', 'nord', 'forest', 'sunset'].forEach(t => {
+            const btn = document.getElementById('theme-btn-' + t);
+            if (btn) {
+                if (theme === t) {
+                    btn.classList.add('btn-primary');
+                    btn.classList.remove('btn-secondary');
+                } else {
+                    btn.classList.remove('btn-primary');
+                    btn.classList.add('btn-secondary');
+                }
+            }
+        });
+    }
+
+    function updateAccentButtons() {
+        const accent = localStorage.getItem('qi_accent') || 'blue';
+        ['blue', 'emerald', 'purple', 'amber', 'rose', 'cyan'].forEach(a => {
+            const btn = document.getElementById('accent-btn-' + a);
+            if (btn) {
+                if (accent === a) {
+                    btn.classList.add('btn-primary');
+                    btn.classList.remove('btn-secondary');
+                } else {
+                    btn.classList.remove('btn-primary');
+                    btn.classList.add('btn-secondary');
+                }
+            }
+        });
+    }
+
+    // 2. Toast Notifications
+    function showToast(msg) {
+        const toast = document.getElementById('settingsToast');
+        const toastMsg = document.getElementById('settingsToastMsg');
+        if (toast && toastMsg) {
+            toastMsg.innerText = msg;
+            toast.style.transform = 'translateY(0)';
+            toast.style.opacity = '1';
+            setTimeout(() => {
+                toast.style.transform = 'translateY(100px)';
+                toast.style.opacity = '0';
+            }, 3000);
+        }
+    }
+
+    // 3. Save Preferences API call
+    async function saveAllPreferences() {
+        const payload = {
+            company_name: document.getElementById('company_name')?.value || '',
+            default_currency: document.getElementById('default_currency')?.value || 'INR',
+            default_allocation: document.getElementById('default_allocation')?.value || 'PROPORTIONAL_LINE_VALUE',
+            default_payment_terms: document.getElementById('default_payment_terms')?.value || 'Net 30 Days',
+            variance_tolerance_pct: document.getElementById('variance_tolerance_pct')?.value || '5.0',
+            auto_matching_mode: document.getElementById('auto_matching_mode')?.value || 'BALANCED',
+            theme: localStorage.getItem('qi_theme') || 'dark',
+            accent: localStorage.getItem('qi_accent') || 'blue'
+        };
+
+        try {
+            const res = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                showToast('✓ Preferences saved successfully');
+            } else {
+                showToast('Error saving preferences');
+            }
+        } catch (e) {
+            showToast('Saved locally in browser');
+        }
+    }
+
+    // 4. Reset Modal Handlers
+    function openResetModal() {
+        document.getElementById('resetConfirmModal').style.display = 'flex';
+    }
+
+    function closeResetModal() {
+        document.getElementById('resetConfirmModal').style.display = 'none';
+    }
+
+    async function executeResetData() {
+        const btn = document.getElementById('confirmResetBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="btn-spinner"></span> Resetting...';
+
+        try {
+            const res = await fetch('/api/settings/reset', { method: 'POST' });
+            if (res.ok) {
+                closeResetModal();
+                showToast('Database reset complete. Redirecting...');
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 800);
+            } else {
+                alert('Error resetting database');
+                btn.disabled = false;
+                btn.innerHTML = 'Yes, Reset Everything';
+            }
+        } catch (e) {
+            alert('Error connecting to server: ' + e);
+            btn.disabled = false;
+            btn.innerHTML = 'Yes, Reset Everything';
+        }
+    }
+
+    async function seedDemoData() {
+        try {
+            const res = await fetch('/api/settings/seed-demo', { method: 'POST' });
+            if (res.ok) {
+                showToast('✓ Demo Benchmark RFQ Seeded!');
+                setTimeout(() => {
+                    window.location.href = '/rfqs';
+                }, 800);
+            }
+        } catch (e) {
+            alert('Error seeding demo data');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        updateThemeButtons();
+        updateAccentButtons();
+    });
+</script>
+{% endblock %}

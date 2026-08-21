@@ -1,0 +1,31 @@
+{
+  "quote_id": "GT-03",
+  "supplier_raw_name": "Delta Electricals India",
+  "quote_number": "QT-DEL-554",
+  "quote_date": "2026-08-19",
+  "currency": "INR",
+  "exchange_rate_to_base": "1.0",
+  "items": [
+    {
+      "line_index": 0,
+      "raw_description": "3 Phase Induction Motor 10HP 1440 RPM IE3 High Efficiency Premium Model - Cast Iron Body",
+      "quoted_qty": "2",
+      "quoted_uom": "PCS",
+      "unit_price": "18500",
+      "tax_rate_pct": "18"
+    },
+    {
+      "line_index": 1,
+      "raw_description": "Direct On-Line (DOL) Motor Starter 10HP",
+      "quoted_qty": "2",
+      "quoted_uom": "PCS",
+      "unit_price": "3200",
+      "tax_rate_pct": "18"
+    }
+  ],
+  "extraction_metadata": {
+    "source_file_name": "03_multiline_desc_quote.xlsx",
+    "source_file_hash": "gt_hash_03",
+    "parser_used": "ground_truth"
+  }
+}

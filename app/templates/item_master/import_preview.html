@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block title %}Preview Catalog Import — Quote Intelligence{% endblock %}
+
+{% block content %}
+<div class="breadcrumb-bar">
+    <div class="breadcrumbs">
+        <a href="/item-master">Item Master</a>
+        <span class="breadcrumb-separator">/</span>
+        <a href="/item-master/import">Import Catalog</a>
+        <span class="breadcrumb-separator">/</span>
+        <span class="breadcrumb-current">Review Extraction Preview</span>
+    </div>
+    <a href="/item-master/import" class="btn btn-secondary btn-sm">&larr; Back to Upload</a>
+</div>
+
+{% if not result.is_valid_catalog %}
+<!-- Rejection / Non-Catalog Diagnostic View -->
+<div style="max-width: 800px; margin: 2rem auto;">
+    <div class="card" style="border: 2px solid var(--danger); background: rgba(239, 68, 68, 0.05); padding: 1.5rem;">
+        <span class="badge badge-danger" style="margin-bottom: 0.5rem;">✕ CATALOG EXTRACTION BLOCKED</span>
+        <h2 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.5rem;">
+            Document Structure Not Recognized as a Product Catalog
+        </h2>
+        <p style="font-size: 0.875rem; color: var(--text-muted); line-height: 1.6; margin-bottom: 1rem;">
+            {{ result.rejection_reason }}
+        </p>
+
+        <div style="background: var(--bg-primary); padding: 1rem; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.8125rem; margin-bottom: 1.5rem;">
+            <div style="font-weight: 700; color: var(--text-main); margin-bottom: 0.35rem;">Expected Catalog Format:</div>
+            <ul style="color: var(--text-muted); padding-left: 1.25rem; line-height: 1.5;">
+                <li>Ensure the document contains a table with columns for <strong>SKU / Part Number</strong>, <strong>Product Description</strong>, and <strong>UOM</strong>.</li>
+                <li>Standard headers like <code>Product Code</code>, <code>Item Description</code>, <code>Stocking Unit</code>, and <code>Brand</code> are automatically recognized.</li>
+            </ul>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <a href="/item-master" class="btn btn-secondary">&larr; Back to Catalog</a>
+            <a href="/item-master/import" class="btn btn-primary">Try Another File &rarr;</a>
+        </div>
+    </div>
+</div>
+
+{% else %}
+
+<!-- Successful Extraction Header -->
+<div style="margin-bottom: 1.25rem;">
+    <h1 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main);">📋 Preview Extracted Catalog Products</h1>
+    <p style="font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.25rem;">
+        Extracted <strong>{{ count }} product(s)</strong> from <code>{{ filename }}</code>. Review the parsed structure and quality diagnostics below before importing.
+    </p>
+</div>
+
+<!-- Detected Structure & Column Mapping Card -->
+<div class="card" style="margin-bottom: 1.25rem; border-left: 4px solid var(--accent);">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.75rem;">
+        <div>
+            <div style="font-weight: 700; font-size: 0.875rem; color: var(--text-main);">
+                🔍 Detected Catalog Structure
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem;">
+                Source: <strong>{{ result.detected_sheet }}</strong> &bull; Scanned {{ result.total_rows_scanned }} rows
+            </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="badge {% if result.confidence_score >= 0.8 %}badge-success{% elif result.confidence_score >= 0.6 %}badge-info{% else %}badge-warning{% endif %}" style="font-size: 0.75rem;">
+                {{ (result.confidence_score * 100)|round|int }}% Confidence
+            </span>
+        </div>
+    </div>
+
+    <!-- Mapped Columns Grid -->
+    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
+        {% for field_name, col_label in result.detected_columns.items() %}
+        <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 4px; padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+            <span style="color: var(--text-muted);">{{ field_name }}:</span>
+            <strong style="color: var(--accent);">{{ col_label }}</strong>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Validation Warnings Banner (If Any) -->
+{% if result.warnings %}
+<div class="card" style="border: 1px solid rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.05); padding: 1rem; margin-bottom: 1.25rem;">
+    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem;">
+        <span class="badge badge-warning" style="font-size: 0.7rem;">⚠ QUALITY AUDIT</span>
+        <span style="font-weight: 700; font-size: 0.8125rem; color: var(--warning);">
+            {{ result.warnings|length }} Quality Notice(s) Detected During Parsing
+        </span>
+    </div>
+    <ul style="font-size: 0.75rem; color: var(--text-muted); padding-left: 1.25rem; line-height: 1.5;">
+        {% for w in result.warnings %}
+        <li>{{ w }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<form action="/item-master/import/confirm" method="POST" id="confirm-form">
+    <!-- Import Configuration Card -->
+    <div class="card" style="padding: 1.25rem; margin-bottom: 1.25rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div>
+                <div style="font-weight: 700; font-size: 0.875rem; color: var(--text-main);">Import Strategy</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">Choose how to merge these products into your Item Master</div>
+            </div>
+            <div style="display: flex; gap: 1.5rem; align-items: center;">
+                <label style="font-size: 0.8125rem; color: var(--text-main); display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+                    <input type="radio" name="mode" value="append" checked>
+                    <strong>Append / Merge</strong> (Add new products, update existing SKUs)
+                </label>
+                <label style="font-size: 0.8125rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+                    <input type="radio" name="mode" value="replace">
+                    <span>Replace Entire Catalog</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview Table Card -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Parsed Products Ready for Import ({{ count }})</div>
+            <span class="badge badge-success">✓ Extraction Verified</span>
+        </div>
+
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 50px; text-align: center;">Include</th>
+                        <th style="width: 150px;">Internal SKU</th>
+                        <th style="width: 140px;">Manufacturer PN</th>
+                        <th>Product Description</th>
+                        <th style="width: 100px;">Brand</th>
+                        <th style="width: 80px;">Stock UOM</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in preview_items %}
+                    <tr>
+                        <td style="text-align: center;">
+                            <input type="checkbox" class="preview-check" checked data-sku="{{ item.internal_sku }}" data-desc="{{ item.canonical_description }}" data-mfr="{{ item.manufacturer_part_number }}" data-uom="{{ item.stocking_uom }}" data-brand="{{ item.brand }}" onchange="updateSelectedImport();">
+                        </td>
+                        <td><code style="color: var(--success); font-weight: 700;">{{ item.internal_sku }}</code></td>
+                        <td>
+                            {% if item.manufacturer_part_number %}
+                                <code style="color: var(--text-main);">{{ item.manufacturer_part_number }}</code>
+                            {% else %}
+                                <span style="color: var(--text-subtle);">—</span>
+                            {% endif %}
+                        </td>
+                        <td style="font-weight: 600; color: var(--text-main);">{{ item.canonical_description }}</td>
+                        <td><span class="badge badge-muted">{{ item.brand or 'Standard' }}</span></td>
+                        <td><span class="badge badge-info">{{ item.stocking_uom }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <input type="hidden" name="items_json" id="items_json" value="">
+    </div>
+
+    <!-- Confirmation Actions -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.25rem;">
+        <a href="/item-master/import" class="btn btn-secondary">&larr; Discard &amp; Upload Another File</a>
+        <button type="submit" class="btn btn-success" style="padding: 0.6rem 1.75rem; font-size: 0.875rem;">
+            ✓ Confirm &amp; Import Products (<span id="import-count">{{ count }}</span>) &rarr;
+        </button>
+    </div>
+</form>
+
+<script>
+    const initialItems = {{ preview_json | safe }};
+
+    function updateSelectedImport() {
+        const selected = [];
+        document.querySelectorAll('.preview-check:checked').forEach((cb, idx) => {
+            selected.push({
+                internal_sku: cb.dataset.sku,
+                canonical_description: cb.dataset.desc,
+                manufacturer_part_number: cb.dataset.mfr,
+                stocking_uom: cb.dataset.uom,
+                brand: cb.dataset.brand,
+                approved_supplier_part_numbers: [],
+                specifications: {}
+            });
+        });
+        document.getElementById('items_json').value = JSON.stringify(selected);
+        document.getElementById('import-count').innerText = selected.length;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('items_json').value = JSON.stringify(initialItems);
+    });
+</script>
+{% endif %}
+{% endblock %}

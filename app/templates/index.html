@@ -1,0 +1,101 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Dashboard — Quote Intelligence Extraction Lab{% endblock %}
+
+{% block content %}
+<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1.5rem; align-items: start;">
+    <!-- Left Column: Create New Test -->
+    <div>
+        <div class="card">
+            <h2 style="font-size: 1.125rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--accent);">🧪 Create Extraction Test</h2>
+            <p style="font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 1rem;">
+                Create a test container to upload and benchmark supplier quotation PDFs/Excels against the CanonicalQuote engine.
+            </p>
+
+            <form action="/tests" method="POST">
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.35rem;">Test Name</label>
+                    <input type="text" name="test_name" placeholder="e.g. ABC Bearings - August RFQ" required autofocus>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center;">
+                    🚀 Create & Open Test Lab
+                </button>
+            </form>
+        </div>
+
+        <div class="card" style="font-size: 0.8125rem; color: var(--text-muted);">
+            <h3 style="font-size: 0.875rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.5rem;">⚙️ Extraction Engine Status</h3>
+            <ul style="list-style: none; padding: 0;">
+                <li style="margin-bottom: 0.35rem;">✓ <strong>Format Parsers:</strong> PDF (pypdf), Excel (openpyxl)</li>
+                <li style="margin-bottom: 0.35rem;">✓ <strong>AST Normalizer:</strong> UOM, Tax, Decimal, Currency</li>
+                <li style="margin-bottom: 0.35rem;">✓ <strong>Data Contract:</strong> CanonicalQuote V1 (Locked)</li>
+                <li style="margin-bottom: 0.35rem;">✓ <strong>Storage Mode:</strong> Local Filesystem (<code>test_runs/</code>)</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Right Column: Recent Tests -->
+    <div>
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2 style="font-size: 1.125rem; font-weight: 700;">📂 Recent Extraction Tests</h2>
+                <span style="font-size: 0.75rem; color: var(--text-muted);">{{ tests|length }} total runs</span>
+            </div>
+
+            {% if tests %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Test ID</th>
+                        <th>Name</th>
+                        <th>File</th>
+                        <th>Lines</th>
+                        <th>Confidence</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in tests[:10] %}
+                    <tr>
+                        <td><code style="color: var(--accent);">{{ t.test_id }}</code></td>
+                        <td style="font-weight: 600;">{{ t.test_name }}</td>
+                        <td style="font-size: 0.75rem; color: var(--text-muted);">
+                            {{ t.source_file_name or "—" }}
+                        </td>
+                        <td>{{ t.line_count }}</td>
+                        <td>
+                            {% if t.average_confidence %}
+                                {{ (t.average_confidence * 100)|round|int }}%
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if t.status == 'SUCCESS' %}
+                                <span class="badge badge-success">Success</span>
+                            {% elif t.status == 'FAILED' %}
+                                <span class="badge badge-danger">Failed</span>
+                            {% elif t.status == 'READY' %}
+                                <span class="badge badge-warning">Ready</span>
+                            {% else %}
+                                <span class="badge badge-muted">Draft</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="/tests/{{ t.test_id }}" class="btn btn-secondary btn-sm">Open Lab</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
+                <p style="font-size: 1rem; margin-bottom: 0.5rem;">No extraction tests created yet.</p>
+                <p style="font-size: 0.8125rem;">Create your first test using the form on the left to upload a supplier quotation.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

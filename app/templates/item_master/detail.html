@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}{{ item.internal_sku }} — Item Master Detail{% endblock %}
+
+{% block content %}
+<div class="breadcrumb-bar">
+    <div class="breadcrumbs">
+        <a href="/item-master">Item Master</a>
+        <span class="breadcrumb-separator">/</span>
+        <span class="breadcrumb-current">{{ item.internal_sku }}</span>
+    </div>
+    <a href="/item-master" class="btn btn-secondary btn-sm">&larr; Back to Item Master</a>
+</div>
+
+<div style="max-width: 900px; margin: 0 auto;">
+    <!-- Product Header Card -->
+    <div class="card" style="border-left: 4px solid var(--success); margin-bottom: 1.25rem;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+            <div>
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+                    <span class="badge badge-success" style="font-size: 0.875rem; font-weight: 700;">{{ item.internal_sku }}</span>
+                    <span class="badge badge-muted">{{ item.internal_item_id }}</span>
+                </div>
+                <h1 style="font-size: 1.3rem; font-weight: 800; color: var(--text-main);">{{ item.canonical_description }}</h1>
+            </div>
+            <div style="text-align: right;">
+                <span style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Stocking Unit</span>
+                <div style="font-size: 1.2rem; font-weight: 800; color: var(--accent);">{{ item.stocking_uom }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem;">
+        <!-- OEM & Identifiers Card -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Product Identifiers</div>
+            </div>
+            <div style="font-size: 0.8125rem;">
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border-subtle);">
+                    <span style="color: var(--text-muted);">Brand / OEM:</span>
+                    <strong>{{ item.brand or 'Standard' }}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border-subtle);">
+                    <span style="color: var(--text-muted);">Manufacturer PN:</span>
+                    <code>{{ item.manufacturer_part_number or '—' }}</code>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem 0;">
+                    <span style="color: var(--text-muted);">Internal Item ID:</span>
+                    <code>{{ item.internal_item_id }}</code>
+                </div>
+            </div>
+        </div>
+
+        <!-- Approved Cross-References Card -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Approved Supplier Part Numbers</div>
+            </div>
+            {% if item.approved_supplier_part_numbers %}
+                <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                    {% for p in item.approved_supplier_part_numbers %}
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-primary); padding: 0.4rem 0.6rem; border-radius: 4px; font-size: 0.8125rem;">
+                        <code style="color: var(--accent); font-weight: 600;">{{ p }}</code>
+                        <span class="badge badge-success" style="font-size: 0.65rem;">Auto-Match Ready</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p style="font-size: 0.8125rem; color: var(--text-muted);">No supplier cross-references registered yet.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Technical Specifications Card -->
+    {% if item.specifications %}
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Technical Specifications</div>
+        </div>
+        <table style="font-size: 0.8125rem;">
+            <thead>
+                <tr>
+                    <th style="width: 200px;">Specification Property</th>
+                    <th>Configured Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for k, v in item.specifications.items() %}
+                <tr>
+                    <td style="color: var(--text-muted); font-weight: 600;">{{ k }}</td>
+                    <td style="font-weight: 700; color: var(--text-main);">{{ v }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

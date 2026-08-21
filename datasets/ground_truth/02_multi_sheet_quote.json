@@ -1,0 +1,33 @@
+{
+  "quote_id": "GT-02",
+  "supplier_raw_name": "Zenith Machinery Spares Pvt Ltd",
+  "quote_number": "QT-ZMS-2026-778",
+  "quote_date": "2026-08-19",
+  "currency": "INR",
+  "exchange_rate_to_base": "1.0",
+  "items": [
+    {
+      "line_index": 0,
+      "raw_description": "Heavy Duty Spur Gear 24T",
+      "supplier_part_number": "GEAR-24T",
+      "quoted_qty": "5",
+      "quoted_uom": "PCS",
+      "unit_price": "2400",
+      "tax_rate_pct": "18"
+    },
+    {
+      "line_index": 1,
+      "raw_description": "Flange Bushing 30x40",
+      "supplier_part_number": "BUSH-3040",
+      "quoted_qty": "20",
+      "quoted_uom": "PCS",
+      "unit_price": "320",
+      "tax_rate_pct": "18"
+    }
+  ],
+  "extraction_metadata": {
+    "source_file_name": "02_multi_sheet_quote.xlsx",
+    "source_file_hash": "gt_hash_02",
+    "parser_used": "ground_truth"
+  }
+}

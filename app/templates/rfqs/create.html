@@ -1,0 +1,353 @@
+{% extends "base.html" %}
+
+{% block title %}Create Procurement RFQ — Quote Intelligence{% endblock %}
+
+{% block content %}
+<div class="breadcrumb-bar">
+    <div class="breadcrumbs">
+        <a href="/rfqs">RFQs</a>
+        <span class="breadcrumb-separator">/</span>
+        <span class="breadcrumb-current">Create New Procurement RFQ</span>
+    </div>
+    <div>
+        <a href="/rfqs" class="btn btn-secondary btn-sm">&larr; Back to RFQs</a>
+    </div>
+</div>
+
+<div style="max-width: 1000px; margin: 0 auto 3rem auto;">
+    <div style="margin-bottom: 1.25rem;">
+        <h1 style="font-size: 1.35rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.25rem;">
+            Create New Procurement RFQ
+        </h1>
+        <p style="font-size: 0.8125rem; color: var(--text-muted);">
+            Define what your organization wants to purchase. Select products from the Item Master or upload an Excel/CSV requirements spreadsheet.
+        </p>
+    </div>
+
+    <form action="/rfqs" method="POST" id="rfq-form" onsubmit="return validateRfqForm();">
+        <!-- 1. RFQ Details Header Card -->
+        <div class="card" style="border-top: 3px solid var(--accent); margin-bottom: 1.25rem;">
+            <div class="card-header">
+                <div class="card-title">1. Procurement Header &amp; Commercial Settings</div>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">
+                <div>
+                    <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; display: block; margin-bottom: 0.35rem;">
+                        RFQ Identifier / Number *
+                    </label>
+                    <input type="text" name="rfq_id" id="rfq_id" placeholder="e.g. RFQ-2026-001" required value="RFQ-{{ range(1000, 9999)|random }}">
+                </div>
+                <div>
+                    <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; display: block; margin-bottom: 0.35rem;">
+                        Procurement Title *
+                    </label>
+                    <input type="text" name="title" id="title" placeholder="e.g. Mechanical Spares &amp; Consumables Q3" required>
+                </div>
+                <div>
+                    <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; display: block; margin-bottom: 0.35rem;">
+                        Base Currency *
+                    </label>
+                    <select name="base_currency" id="base_currency">
+                        <option value="INR" selected>INR (Indian Rupee - ₹)</option>
+                        <option value="USD">USD (US Dollar - $)</option>
+                        <option value="EUR">EUR (Euro - €)</option>
+                        <option value="GBP">GBP (British Pound - £)</option>
+                        <option value="AED">AED (UAE Dirham)</option>
+                        <option value="SGD">SGD (Singapore Dollar)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Scope Definition Method Switcher -->
+        <div class="card" style="margin-bottom: 1.25rem;">
+            <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem;">
+                <div>
+                    <div class="card-title">2. Define RFQ Scope &amp; Requested Line Items</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">
+                        Choose how to supply the line items for this procurement round.
+                    </div>
+                </div>
+                <!-- Mode Switcher Tabs -->
+                <div style="display: flex; gap: 0.35rem; background: var(--bg-card-subtle); padding: 0.25rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <button type="button" id="tab-btn-picker" onclick="switchScopeMode('picker')" class="btn btn-primary btn-sm" style="padding: 0.35rem 0.85rem; font-size: 0.75rem;">
+                        Option A: Select from Company Catalog
+                    </button>
+                    <button type="button" id="tab-btn-import" onclick="switchScopeMode('import')" class="btn btn-secondary btn-sm" style="padding: 0.35rem 0.85rem; font-size: 0.75rem;">
+                        Option B: Upload Requirements (.xlsx / .csv)
+                    </button>
+                </div>
+            </div>
+
+            <!-- OPTION A: ITEM MASTER PICKER -->
+            <div id="scope-picker-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                    <div style="font-size: 0.8125rem; color: var(--text-muted);">
+                        Check the catalog products to include in this RFQ round and set requested quantities:
+                    </div>
+                    <div>
+                        <input type="text" id="catalog-filter" placeholder="Search catalog by SKU, description..." onkeyup="filterCatalog()" style="max-width: 260px; padding: 0.35rem 0.65rem; font-size: 0.75rem;">
+                    </div>
+                </div>
+
+                <div style="overflow-x: auto; max-height: 400px; border: 1px solid var(--border-color); border-radius: 8px;">
+                    <table id="catalog-table">
+                        <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 10;">
+                            <tr>
+                                <th style="width: 60px; text-align: center;">Select</th>
+                                <th style="width: 150px;">Internal SKU</th>
+                                <th>Canonical Description &amp; Specifications</th>
+                                <th style="width: 90px;">Stock UOM</th>
+                                <th style="width: 140px;">Requested Qty</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in item_master %}
+                            <tr class="catalog-row">
+                                <td style="text-align: center;">
+                                    <input type="checkbox" class="item-check" data-id="{{ item.internal_item_id }}" data-sku="{{ item.internal_sku }}" data-desc="{{ item.canonical_description }}" data-uom="{{ item.stocking_uom }}" onchange="updateSelectedItems()">
+                                </td>
+                                <td><code style="color: var(--accent); font-weight: 700;">{{ item.internal_sku }}</code></td>
+                                <td>
+                                    <div style="font-weight: 600; color: var(--text-main);">{{ item.canonical_description }}</div>
+                                    {% if item.manufacturer_part_number %}
+                                    <div style="font-size: 0.7rem; color: var(--text-muted);">MPN: <code>{{ item.manufacturer_part_number }}</code></div>
+                                    {% endif %}
+                                </td>
+                                <td><span class="badge badge-info">{{ item.stocking_uom }}</span></td>
+                                <td>
+                                    <input type="number" step="any" min="1" value="100" class="item-qty" style="padding: 0.3rem 0.5rem; font-size: 0.75rem; width: 100%;" onchange="updateSelectedItems()">
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- OPTION B: IMPORT REQUIREMENTS SPREADSHEET -->
+            <div id="scope-import-section" style="display: none;">
+                <div style="background: var(--bg-card-subtle); border: 2px dashed var(--accent-border); border-radius: 10px; padding: 2rem; text-align: center; margin-bottom: 1.25rem;">
+                    <svg style="width: 40px; height: 40px; color: var(--accent); margin-bottom: 0.5rem;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                    </svg>
+                    <div style="font-weight: 700; font-size: 1rem; color: var(--text-main); margin-bottom: 0.25rem;">
+                        Upload RFQ Requirements Spreadsheet (.xlsx, .csv)
+                    </div>
+                    <div style="font-size: 0.8125rem; color: var(--text-muted); max-width: 600px; margin: 0 auto 1.25rem auto;">
+                        Upload your list of required products, quantities, and UOMs. Any items not currently in your Item Master will be automatically registered into your catalog so supplier quotes can match them.
+                    </div>
+                    <input type="file" id="req-file-input" accept=".xlsx,.xls,.csv,.pdf" style="display: none;" onchange="handleRequirementUpload(this)">
+                    <button type="button" onclick="document.getElementById('req-file-input').click();" class="btn btn-primary btn-sm">
+                        Choose Requirements File (.xlsx / .csv)
+                    </button>
+                    <div id="req-file-status" style="margin-top: 0.75rem; font-size: 0.8125rem; color: var(--accent); font-weight: 600;"></div>
+                </div>
+
+                <!-- Preview Area for Extracted Requirement Rows -->
+                <div id="req-preview-container" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+                        <div style="font-weight: 700; font-size: 0.875rem; color: var(--text-main);">
+                            Extracted Items Preview &amp; Catalog Alignment:
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--text-muted); cursor: pointer;">
+                                <input type="checkbox" id="auto-add-catalog-toggle" checked style="width: auto; min-height: auto;">
+                                <span>Automatically add new items to Item Master catalog</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div style="overflow-x: auto; max-height: 320px; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 1rem;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;">#</th>
+                                    <th>Item SKU / Code</th>
+                                    <th>Product Description &amp; Specs</th>
+                                    <th style="width: 100px;">Req Qty</th>
+                                    <th style="width: 80px;">UOM</th>
+                                    <th style="width: 140px;">Catalog Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="req-preview-tbody">
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card-subtle); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div id="import-count-msg" style="font-size: 0.8125rem; color: var(--text-main); font-weight: 600;">
+                            0 items ready to be populated
+                        </div>
+                        <button type="button" onclick="confirmImportedRequirements()" class="btn btn-success btn-sm">
+                            ✓ Use These Items for This RFQ
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <input type="hidden" name="items_json" id="items_json" value="[]">
+        </div>
+
+        <!-- RFQ Scope Summary & Launch Action -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+            <div id="selected-summary" style="font-size: 0.9375rem; color: var(--accent); font-weight: 700;">
+                0 products selected for this RFQ
+            </div>
+            <button type="submit" class="btn btn-primary" style="padding: 0.65rem 1.75rem; font-size: 0.9375rem;">
+                Create RFQ &amp; Launch Workspace &rarr;
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+    let importedItems = [];
+    let activeMode = 'picker';
+
+    function switchScopeMode(mode) {
+        activeMode = mode;
+        if (mode === 'import') {
+            document.getElementById('scope-picker-section').style.display = 'none';
+            document.getElementById('scope-import-section').style.display = '';
+            document.getElementById('tab-btn-picker').classList.remove('btn-primary');
+            document.getElementById('tab-btn-picker').classList.add('btn-secondary');
+            document.getElementById('tab-btn-import').classList.add('btn-primary');
+            document.getElementById('tab-btn-import').classList.remove('btn-secondary');
+        } else {
+            document.getElementById('scope-picker-section').style.display = '';
+            document.getElementById('scope-import-section').style.display = 'none';
+            document.getElementById('tab-btn-picker').classList.add('btn-primary');
+            document.getElementById('tab-btn-picker').classList.remove('btn-secondary');
+            document.getElementById('tab-btn-import').classList.remove('btn-primary');
+            document.getElementById('tab-btn-import').classList.add('btn-secondary');
+        }
+    }
+
+    function filterCatalog() {
+        const query = document.getElementById('catalog-filter').value.toLowerCase();
+        const rows = document.querySelectorAll('.catalog-row');
+        rows.forEach(r => {
+            const text = r.innerText.toLowerCase();
+            r.style.display = text.includes(query) ? '' : 'none';
+        });
+    }
+
+    function updateSelectedItems() {
+        if (activeMode === 'import' && importedItems.length > 0) {
+            // Keep imported items
+            return;
+        }
+        const items = [];
+        document.querySelectorAll('.item-check:checked').forEach(cb => {
+            const row = cb.closest('tr');
+            const qtyInput = row.querySelector('.item-qty');
+            items.push({
+                internal_item_id: cb.dataset.id,
+                sku: cb.dataset.sku,
+                description: cb.dataset.desc,
+                requested_uom: cb.dataset.uom,
+                requested_quantity: parseFloat(qtyInput.value) || 1.0
+            });
+        });
+        document.getElementById('items_json').value = JSON.stringify(items);
+        document.getElementById('selected-summary').innerText = items.length + ' product(s) selected from Item Master for this RFQ';
+    }
+
+    async function handleRequirementUpload(input) {
+        if (!input.files || !input.files[0]) return;
+        const file = input.files[0];
+        document.getElementById('req-file-status').innerText = 'Extracting items from ' + file.name + '...';
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const res = await fetch('/rfqs/requirements/preview', {
+                method: 'POST',
+                body: formData
+            });
+            if (!res.ok) throw new Error('Preview extraction failed');
+            const data = await res.json();
+            importedItems = data.items || [];
+
+            const tbody = document.getElementById('req-preview-tbody');
+            tbody.innerHTML = '';
+            importedItems.forEach((it, idx) => {
+                const tr = document.createElement('tr');
+                const isCatalog = it.is_matched;
+                const displaySku = it.matched_sku || it.raw_sku || ('REQ-ITEM-' + (idx + 1));
+                const displayDesc = it.matched_description || it.raw_description || displaySku;
+
+                tr.innerHTML = `
+                    <td><code>${idx + 1}</code></td>
+                    <td><strong style="color: var(--accent);">${displaySku}</strong></td>
+                    <td>
+                        <div style="font-weight: 600; color: var(--text-main);">${displayDesc}</div>
+                    </td>
+                    <td><strong>${it.raw_qty || 100}</strong></td>
+                    <td><span class="badge badge-info">${it.raw_uom || 'PCS'}</span></td>
+                    <td>
+                        <span class="badge ${isCatalog ? 'badge-success' : 'badge-purple'}">
+                            ${isCatalog ? 'In Catalog' : '+ New Item (Will Add)'}
+                        </span>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('req-preview-container').style.display = '';
+            document.getElementById('req-file-status').innerText = `✓ Successfully extracted ${importedItems.length} line items from ${file.name}`;
+            document.getElementById('import-count-msg').innerText = `${importedItems.length} items ready to populate into RFQ`;
+
+            // Auto populate into RFQ scope
+            confirmImportedRequirements();
+        } catch (err) {
+            document.getElementById('req-file-status').innerText = 'Error reading spreadsheet: ' + err.message;
+        }
+    }
+
+    function confirmImportedRequirements() {
+        if (!importedItems || importedItems.length === 0) return;
+        
+        // Uncheck picker checkboxes to prevent mixed state
+        document.querySelectorAll('.item-check').forEach(cb => cb.checked = false);
+
+        const items = importedItems.map((it, idx) => {
+            const sku = it.matched_sku || it.raw_sku || ("REQ-SKU-" + (idx + 1));
+            const desc = it.matched_description || it.raw_description || sku;
+            const uom = it.raw_uom || "PCS";
+            const qty = parseFloat(it.raw_qty) || 100.0;
+            const item_id = it.matched_item_id || ("ITEM-" + sku);
+
+            return {
+                rfq_line_id: "RFQ-LINE-" + String(idx + 1).padStart(3, '0'),
+                internal_item_id: item_id,
+                sku: sku,
+                description: desc,
+                requested_uom: uom,
+                requested_quantity: qty
+            };
+        });
+
+        document.getElementById('items_json').value = JSON.stringify(items);
+        document.getElementById('selected-summary').innerText = `${items.length} requirement items loaded from spreadsheet for this RFQ`;
+        document.getElementById('import-count-msg').innerHTML = `<span style="color: var(--success); font-weight: 700;">✓ ${items.length} items successfully loaded into RFQ scope!</span>`;
+    }
+
+    function validateRfqForm() {
+        const rawJson = document.getElementById('items_json').value;
+        try {
+            const items = JSON.parse(rawJson);
+            if (!items || items.length === 0) {
+                alert('Please select at least 1 item from the catalog or upload a requirements spreadsheet before creating the RFQ.');
+                return false;
+            }
+        } catch (e) {
+            alert('Please select at least 1 item for this RFQ.');
+            return false;
+        }
+        return true;
+    }
+</script>
+{% endblock %}

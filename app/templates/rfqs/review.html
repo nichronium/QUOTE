@@ -1,0 +1,415 @@
+{% extends "base.html" %}
+
+{% block title %}Review &amp; Product Alignment Queue — {{ rfq.rfq_id }} — Quote Intelligence{% endblock %}
+
+{% block content %}
+<!-- Top Breadcrumb Bar -->
+<div class="breadcrumb-bar">
+    <div class="breadcrumbs">
+        <a href="/rfqs">RFQs</a>
+        <span class="breadcrumb-separator">/</span>
+        <a href="/rfqs/{{ rfq.rfq_id }}">{{ rfq.rfq_id }} &bull; {{ rfq.title }}</a>
+        <span class="breadcrumb-separator">/</span>
+        <span class="breadcrumb-current">Batch Review Queue</span>
+    </div>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <a href="/rfqs/{{ rfq.rfq_id }}" class="btn btn-secondary btn-sm">&larr; Back to RFQ Workspace</a>
+        <a href="/comparisons/create?rfq_id={{ rfq.rfq_id }}" class="btn btn-success btn-sm">
+            Proceed to Comparison &rarr;
+        </a>
+    </div>
+</div>
+
+<!-- Header Card -->
+<div class="card" style="background: var(--bg-card); border-top: 3px solid var(--warning); padding: 1.25rem; margin-bottom: 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                <span class="badge badge-warning">Batch Review Queue</span>
+                <code style="color: var(--accent); font-weight: 700; font-size: 0.8125rem;">{{ rfq.rfq_id }} &bull; {{ rfq.title }}</code>
+            </div>
+            <h1 style="font-size: 1.35rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.25rem;">
+                Product Alignment &amp; Exception Resolution
+            </h1>
+            <p style="font-size: 0.8125rem; color: var(--text-muted); margin: 0;">
+                Resolve ambiguous supplier quotations in one unified batch without page reloads. Safe matches are pre-aligned; confirm or adjust candidate mappings below.
+            </p>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <a href="/rfqs/{{ rfq.rfq_id }}" class="btn btn-secondary btn-sm">
+                &larr; RFQ Workspace
+            </a>
+            <a href="/comparisons/create?rfq_id={{ rfq.rfq_id }}" class="btn btn-success btn-sm">
+                Compare Quotations &rarr;
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Sticky Batch Progress & Filter Ribbon -->
+<div class="card" style="padding: 1rem 1.25rem; margin-bottom: 1.25rem; background: var(--bg-card); border: 1px solid var(--border-color); position: sticky; top: 70px; z-index: 20; box-shadow: 0 4px 16px rgba(0,0,0,0.15);">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.75rem;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <strong style="color: var(--text-main); font-size: 0.9375rem;" id="progress-summary-text">
+                    {{ stats.total_auto_matched }} of {{ stats.total_lines_extracted }} items resolved
+                </strong>
+                <span class="badge badge-info" id="pending-issues-badge">
+                    {{ stats.total_issues_count }} Pending Review
+                </span>
+            </div>
+        </div>
+
+        <!-- Safe Bulk Action & Navigation Controls -->
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            {% if stats.safe_suggestions_count > 0 %}
+            <button type="button" id="btn-bulk-safe" onclick="executeBulkAcceptSafe();" class="btn btn-success btn-sm" style="font-size: 0.75rem; padding: 0.35rem 0.85rem;">
+                ✓ Accept All High-Confidence Matches ({{ stats.safe_suggestions_count }})
+            </button>
+            {% endif %}
+            <div style="display: flex; gap: 0.25rem;">
+                <button type="button" onclick="navigateIssue(-1);" class="btn btn-secondary btn-sm" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" title="Previous issue (k or Up)">
+                    &uarr; Prev
+                </button>
+                <button type="button" onclick="navigateIssue(1);" class="btn btn-secondary btn-sm" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" title="Next issue (j or Down)">
+                    Next &darr;
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Animated Progress Bar -->
+    <div style="background: var(--bg-card-subtle); height: 8px; border-radius: 4px; overflow: hidden; border: 1px solid var(--border-color);">
+        {% set total_items = stats.total_lines_extracted if stats.total_lines_extracted > 0 else 1 %}
+        {% set pct = ((stats.total_auto_matched / total_items) * 100)|round|int %}
+        <div id="queue-progress-bar" style="background: linear-gradient(90deg, var(--accent), var(--success)); height: 100%; width: {{ pct }}%; transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);"></div>
+    </div>
+
+    <!-- Filter Chips -->
+    <div style="display: flex; gap: 0.35rem; margin-top: 0.75rem; flex-wrap: wrap;">
+        <button type="button" class="btn btn-primary btn-sm filter-tab active" onclick="filterCategory('ALL', this)" style="padding: 0.2rem 0.65rem; font-size: 0.7rem;">
+            All Issues ({{ issues|length }})
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm filter-tab" onclick="filterCategory('AMBIGUOUS', this)" style="padding: 0.2rem 0.65rem; font-size: 0.7rem;">
+            Ambiguous Candidates
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm filter-tab" onclick="filterCategory('UOM_CONFLICT', this)" style="padding: 0.2rem 0.65rem; font-size: 0.7rem;">
+            UOM Conflicts
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm filter-tab" onclick="filterCategory('UNMATCHED', this)" style="padding: 0.2rem 0.65rem; font-size: 0.7rem;">
+            Non-Catalog Lines
+        </button>
+    </div>
+</div>
+
+<!-- All Resolved Celebration Banner (Hidden unless 0 issues) -->
+<div id="all-resolved-banner" class="card" style="display: {% if issues|length == 0 %}block{% else %}none{% endif %}; border: 2px solid var(--success); background: linear-gradient(135deg, rgba(34, 197, 94, 0.12) 0%, rgba(20, 31, 56, 0.95) 100%); padding: 1.75rem; text-align: center; margin-bottom: 1.5rem;">
+    <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎉</div>
+    <h3 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.25rem;">
+        All Product Alignments Resolved!
+    </h3>
+    <p style="font-size: 0.875rem; color: var(--text-muted); max-width: 540px; margin: 0 auto 1.25rem auto;">
+        All supplier quotation items are matched and normalized against the Item Master catalog. This RFQ is 100% ready for commercial comparison.
+    </p>
+    <div style="display: flex; justify-content: center; gap: 0.75rem;">
+        <a href="/rfqs/{{ rfq.rfq_id }}" class="btn btn-secondary">
+            &larr; Return to RFQ Workspace
+        </a>
+        <a href="/comparisons/create?rfq_id={{ rfq.rfq_id }}" class="btn btn-success" style="padding: 0.65rem 1.5rem; font-weight: 700;">
+            Proceed to Commercial Comparison &rarr;
+        </a>
+    </div>
+</div>
+
+<!-- Issue Queue Cards Container -->
+<div id="issues-queue-container">
+    {% for issue in issues %}
+    <div class="card issue-card" id="card-{{ issue.issue_id }}" data-issue-id="{{ issue.issue_id }}" data-quote-id="{{ issue.quote_id }}" data-line-index="{{ issue.line_index }}" data-category="{{ issue.category }}" style="margin-bottom: 1rem; border-left: 4px solid {% if issue.category == 'UOM_CONFLICT' %}var(--danger){% elif issue.is_safe_auto_match %}var(--success){% else %}var(--warning){% endif %}; transition: all 0.25s ease;">
+        <!-- Issue Card Header -->
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.6rem; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span class="badge badge-muted">Line #{{ issue.line_number }}</span>
+                <strong style="color: var(--text-main); font-size: 0.9375rem;">{{ issue.supplier_name }}</strong>
+                <code style="color: var(--accent); font-size: 0.75rem;">{{ issue.quote_id }}</code>
+            </div>
+            <div>
+                {% if issue.category == 'UOM_CONFLICT' %}
+                    <span class="badge badge-danger">UOM Conflict</span>
+                {% elif issue.is_safe_auto_match %}
+                    <span class="badge badge-success">High Confidence (Safe)</span>
+                {% elif issue.category == 'UNMATCHED' %}
+                    <span class="badge badge-muted">Non-Catalog Line</span>
+                {% else %}
+                    <span class="badge badge-warning">Ambiguous Candidate</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Issue Body Grid: Quoted vs Target Match & Multi-Signal Diagnostics -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+            <!-- Left: Supplier Quoted Line -->
+            <div style="background: var(--bg-card-subtle); padding: 0.85rem; border-radius: 6px; border: 1px solid var(--border-color);">
+                <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 0.35rem;">
+                    Supplier Extracted Line
+                </div>
+                <div style="font-weight: 700; font-size: 0.9375rem; color: var(--text-main); margin-bottom: 0.25rem;">
+                    {{ issue.raw_description }}
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.4;">
+                    <div>Quoted: <strong>{{ issue.quoted_qty }} {{ issue.quoted_uom }}</strong> @ <strong>{{ issue.currency }} {{ issue.unit_price }}</strong></div>
+                    {% if issue.supplier_part_number %}
+                    <div>Supplier PN: <code style="color: var(--accent);">{{ issue.supplier_part_number }}</code></div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Right: Best Matching Candidate & Diagnostics -->
+            <div style="background: var(--bg-card-subtle); padding: 0.85rem; border-radius: 6px; border: 1px solid var(--border-color);">
+                <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 0.35rem;">
+                    Proposed Catalog Match &amp; Evidence
+                </div>
+                {% if issue.best_candidate %}
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <code style="color: var(--accent); font-weight: 800; font-size: 0.875rem;">{{ issue.best_candidate.candidate_sku }}</code>
+                        <span class="badge {% if issue.best_candidate.match_score >= 0.88 %}badge-success{% else %}badge-warning{% endif %}">
+                            {{ "%.0f"|format(issue.best_candidate.match_score * 100) }}% Confidence
+                        </span>
+                    </div>
+                    <div style="font-size: 0.8125rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.25rem;">
+                        {{ issue.best_candidate.candidate_description }}
+                    </div>
+                    <div style="font-size: 0.7rem; color: var(--text-muted);">
+                        {% if issue.best_candidate.explanations %}
+                            {{ issue.best_candidate.explanations[0] }}
+                        {% else %}
+                            {{ issue.review_reasons[0] }}
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <div style="color: var(--text-muted); font-size: 0.8125rem; font-style: italic;">
+                        No automatic catalog candidate found above review threshold.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Interactive Resolution Action Bar -->
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; background: var(--bg-primary); padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color);">
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                <!-- One-Click Primary Accept -->
+                {% if issue.best_candidate %}
+                <button type="button" onclick="resolveSingleIssue('{{ issue.quote_id }}', {{ issue.line_index }}, '{{ issue.best_candidate.candidate_sku }}', 'ACCEPT');" class="btn btn-primary btn-sm" style="padding: 0.35rem 0.9rem; font-size: 0.75rem;">
+                    ✓ Accept Match ({{ issue.best_candidate.candidate_sku }})
+                </button>
+                {% endif %}
+
+                <!-- Alternative Top Candidates Dropdown -->
+                {% if issue.top_candidates and issue.top_candidates|length > 1 %}
+                <div style="display: inline-flex; align-items: center; gap: 0.25rem;">
+                    <select id="select-cand-{{ issue.issue_id }}" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; max-width: 170px;">
+                        {% for cand in issue.top_candidates %}
+                        <option value="{{ cand.candidate_sku }}">{{ cand.candidate_sku }} ({{ "%.0f"|format(cand.match_score * 100) }}%)</option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" onclick="resolveFromDropdown('{{ issue.quote_id }}', {{ issue.line_index }}, 'select-cand-{{ issue.issue_id }}');" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.55rem; font-size: 0.75rem;">
+                        Confirm
+                    </button>
+                </div>
+                {% endif %}
+
+                <!-- Map to Any Catalog Item -->
+                <div style="display: inline-flex; align-items: center; gap: 0.25rem;">
+                    <select id="select-custom-{{ issue.issue_id }}" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; max-width: 170px;">
+                        <option value="">Map to Catalog SKU...</option>
+                        {% for im in item_master %}
+                        <option value="{{ im.internal_sku }}">{{ im.internal_sku }} &bull; {{ im.canonical_description[:25] }}...</option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" onclick="resolveFromCustomSelect('{{ issue.quote_id }}', {{ issue.line_index }}, 'select-custom-{{ issue.issue_id }}');" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.55rem; font-size: 0.75rem;">
+                        Map SKU
+                    </button>
+                </div>
+            </div>
+
+            <div>
+                <button type="button" onclick="resolveSingleIssue('{{ issue.quote_id }}', {{ issue.line_index }}, null, 'MARK_UNMATCHED');" class="btn btn-secondary btn-sm" style="padding: 0.3rem 0.65rem; font-size: 0.75rem; color: var(--text-muted);">
+                    Mark Unmatched
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+    let activeCategory = 'ALL';
+    let currentCardIndex = 0;
+
+    function filterCategory(cat, btn) {
+        activeCategory = cat;
+        document.querySelectorAll('.filter-tab').forEach(b => {
+            b.classList.remove('btn-primary', 'active');
+            b.classList.add('btn-secondary');
+        });
+        if (btn) {
+            btn.classList.remove('btn-secondary');
+            btn.classList.add('btn-primary', 'active');
+        }
+
+        const cards = document.querySelectorAll('.issue-card');
+        cards.forEach(c => {
+            if (c.classList.contains('is-resolved')) {
+                c.style.display = 'none';
+                return;
+            }
+            if (cat === 'ALL') {
+                c.style.display = '';
+            } else if (cat === 'AMBIGUOUS' && (c.dataset.category === 'AMBIGUOUS' || c.dataset.category === 'CLOSE_CANDIDATES')) {
+                c.style.display = '';
+            } else if (cat === 'UOM_CONFLICT' && c.dataset.category === 'UOM_CONFLICT') {
+                c.style.display = '';
+            } else if (cat === 'UNMATCHED' && c.dataset.category === 'UNMATCHED') {
+                c.style.display = '';
+            } else {
+                c.style.display = 'none';
+            }
+        });
+    }
+
+    async function resolveSingleIssue(quoteId, lineIndex, chosenSku, action) {
+        const issueId = `${quoteId}_${lineIndex}`;
+        const card = document.getElementById(`card-${issueId}`);
+
+        const formData = new FormData();
+        formData.append('quote_id', quoteId);
+        formData.append('line_index', lineIndex);
+        if (chosenSku) formData.append('chosen_candidate_sku', chosenSku);
+        formData.append('action', action);
+
+        try {
+            const res = await fetch('/rfqs/{{ rfq.rfq_id }}/review/resolve', {
+                method: 'POST',
+                body: formData,
+                headers: { 'Accept': 'application/json' }
+            });
+
+            if (!res.ok) throw new Error('Failed to resolve issue');
+            const data = await res.json();
+
+            if (card) {
+                card.classList.add('is-resolved');
+                card.style.opacity = '0.4';
+                card.style.pointerEvents = 'none';
+                card.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem; color: var(--success); font-weight: 700; font-size: 0.8125rem;">
+                        <span>✓ Resolved (${action === 'MARK_UNMATCHED' ? 'Marked Unmatched' : chosenSku})</span>
+                        <span style="font-size: 0.75rem; color: var(--text-muted);">Saved</span>
+                    </div>
+                `;
+                setTimeout(() => {
+                    card.style.display = 'none';
+                    checkQueueStatus();
+                }, 400);
+            }
+
+            // Update Progress & Badge
+            if (data.stats) {
+                updateProgressUI(data.stats);
+            }
+
+            // Scroll to next unresolved card
+            scrollToNextCard();
+
+        } catch (err) {
+            alert('Error resolving item: ' + err.message);
+        }
+    }
+
+    function resolveFromDropdown(quoteId, lineIndex, selectId) {
+        const sel = document.getElementById(selectId);
+        if (!sel || !sel.value) return;
+        resolveSingleIssue(quoteId, lineIndex, sel.value, 'CHOOSE');
+    }
+
+    function resolveFromCustomSelect(quoteId, lineIndex, selectId) {
+        const sel = document.getElementById(selectId);
+        if (!sel || !sel.value) {
+            alert('Please select a catalog SKU to map.');
+            return;
+        }
+        resolveSingleIssue(quoteId, lineIndex, sel.value, 'MANUAL_OVERRIDE');
+    }
+
+    async function executeBulkAcceptSafe() {
+        if (!confirm('Accept all high-confidence safe matches across this RFQ?')) return;
+
+        const btn = document.getElementById('btn-bulk-safe');
+        if (btn) btn.disabled = true;
+
+        try {
+            const res = await fetch('/rfqs/{{ rfq.rfq_id }}/review/bulk-accept-safe', {
+                method: 'POST',
+                headers: { 'Accept': 'application/json' }
+            });
+
+            if (!res.ok) throw new Error('Bulk accept failed');
+            const data = await res.json();
+            alert(`Successfully accepted ${data.accepted_count} high-confidence matches!`);
+            window.location.reload();
+        } catch (err) {
+            alert('Error during bulk acceptance: ' + err.message);
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    function updateProgressUI(stats) {
+        const total = stats.total_lines_extracted || 1;
+        const resolved = stats.total_auto_matched || 0;
+        const pending = stats.total_issues_count || 0;
+        const pct = Math.min(100, Math.round((resolved / total) * 100));
+
+        const bar = document.getElementById('queue-progress-bar');
+        const txt = document.getElementById('progress-summary-text');
+        const badge = document.getElementById('pending-issues-badge');
+
+        if (bar) bar.style.width = pct + '%';
+        if (txt) txt.innerText = `${resolved} of ${total} items resolved (${pct}%)`;
+        if (badge) badge.innerText = `${pending} Pending Review`;
+    }
+
+    function scrollToNextCard() {
+        const visibleCards = Array.from(document.querySelectorAll('.issue-card')).filter(c => c.style.display !== 'none' && !c.classList.contains('is-resolved'));
+        if (visibleCards.length > 0) {
+            visibleCards[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+
+    function navigateIssue(direction) {
+        const visibleCards = Array.from(document.querySelectorAll('.issue-card')).filter(c => c.style.display !== 'none' && !c.classList.contains('is-resolved'));
+        if (visibleCards.length === 0) return;
+        currentCardIndex = Math.max(0, Math.min(visibleCards.length - 1, currentCardIndex + direction));
+        visibleCards[currentCardIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function checkQueueStatus() {
+        const visibleCards = Array.from(document.querySelectorAll('.issue-card')).filter(c => c.style.display !== 'none' && !c.classList.contains('is-resolved'));
+        if (visibleCards.length === 0) {
+            const banner = document.getElementById('all-resolved-banner');
+            if (banner) banner.style.display = 'block';
+        }
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+        if (e.key === 'j' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            navigateIssue(1);
+        } else if (e.key === 'k' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            navigateIssue(-1);
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,33 @@
+{
+  "quote_id": "GT-04",
+  "supplier_raw_name": "Matrix Bearings Corp",
+  "quote_number": "QT-MAT-2026-303",
+  "quote_date": "2026-08-19",
+  "currency": "INR",
+  "exchange_rate_to_base": "1.0",
+  "items": [
+    {
+      "line_index": 0,
+      "raw_description": "SKF Ball Bearing 6205 2RS C3",
+      "supplier_part_number": "6205-2RS",
+      "quoted_qty": "25",
+      "quoted_uom": "PCS",
+      "unit_price": "520",
+      "tax_rate_pct": "18"
+    },
+    {
+      "line_index": 1,
+      "raw_description": "SKF Ball Bearing 6306 2RS C3",
+      "supplier_part_number": "6306-2RS",
+      "quoted_qty": "15",
+      "quoted_uom": "PCS",
+      "unit_price": "780",
+      "tax_rate_pct": "18"
+    }
+  ],
+  "extraction_metadata": {
+    "source_file_name": "04_clean_quote.csv",
+    "source_file_hash": "gt_hash_04",
+    "parser_used": "ground_truth"
+  }
+}

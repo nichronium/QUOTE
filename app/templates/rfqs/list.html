@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Procurement RFQs — Quote Intelligence{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+    <div>
+        <h1 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main);">Procurement Rounds &amp; RFQs</h1>
+        <p style="font-size: 0.8125rem; color: var(--text-muted);">
+            Create sourcing rounds, upload supplier quotations, align items to Item Master, and determine optimal commercial awards.
+        </p>
+    </div>
+    <div>
+        <a href="/rfqs/create" class="btn btn-primary btn-sm">+ Create New RFQ</a>
+    </div>
+</div>
+
+{% if rfqs %}
+<div class="card" style="border-top: 3px solid var(--accent);">
+    <div class="card-header">
+        <div class="card-title">Active Procurement Rounds ({{ rfqs|length }})</div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>RFQ Reference</th>
+                <th>Procurement Title</th>
+                <th>Base Currency</th>
+                <th>Requested Scope</th>
+                <th>Supplier Quotes</th>
+                <th>Round Status</th>
+                <th style="text-align: right;">Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rfqs %}
+            <tr>
+                <td>
+                    <code style="color: var(--accent); font-weight: 700; font-size: 0.8125rem;">{{ r.rfq_id }}</code>
+                    {% if r.is_demo %}
+                    <span class="badge badge-purple" style="font-size: 0.65rem; margin-left: 0.25rem;">Demo</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div style="font-weight: 700; font-size: 0.875rem;">{{ r.title }}</div>
+                </td>
+                <td>
+                    <span class="badge badge-info">{{ r.base_currency }}</span>
+                </td>
+                <td>
+                    <span style="font-weight: 600;">{{ r.line_item_count }} Items</span>
+                </td>
+                <td>
+                    <span style="font-weight: 600; font-family: var(--font-mono);">{{ r.quote_count }} Received</span>
+                    {% if r.ready_quote_count > 0 %}
+                    <span style="font-size: 0.75rem; color: var(--success);">({{ r.ready_quote_count }} ready)</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if r.status == 'EVALUATED' %}
+                        <span class="badge badge-success">Award Evaluated</span>
+                    {% elif r.status == 'READY_FOR_COMPARISON' %}
+                        <span class="badge badge-success">Ready to Compare</span>
+                    {% elif r.status == 'MATCHING_REVIEW' %}
+                        <span class="badge badge-warning">Review Required</span>
+                    {% elif r.status == 'QUOTES_PENDING' %}
+                        <span class="badge badge-info">Quotes Ingesting</span>
+                    {% else %}
+                        <span class="badge badge-muted">Draft</span>
+                    {% endif %}
+                </td>
+                <td style="text-align: right;">
+                    <a href="/rfqs/{{ r.rfq_id }}" class="btn btn-primary btn-sm">
+                        Open Workspace &rarr;
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card" style="text-align: center; padding: 4rem 1.5rem; border-top: 3px solid var(--accent);">
+    <h2 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.5rem;">
+        No Procurement Rounds Yet
+    </h2>
+    <p style="font-size: 0.875rem; color: var(--text-muted); max-width: 520px; margin: 0 auto 1.5rem auto; line-height: 1.6;">
+        Create your first RFQ to define your item requirements, upload supplier quotations, and determine the optimal commercial award.
+    </p>
+    <div style="display: flex; justify-content: center; gap: 1rem;">
+        <a href="/rfqs/create" class="btn btn-primary" style="padding: 0.6rem 1.4rem; font-size: 0.875rem;">
+            + Create New RFQ &rarr;
+        </a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

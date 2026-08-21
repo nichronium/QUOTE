@@ -1,0 +1,646 @@
+{% extends "base.html" %}
+
+{% block title %}{{ rfq.title }} ({{ rfq.rfq_id }}) — RFQ Workspace{% endblock %}
+
+{% block content %}
+<!-- Top Breadcrumb Bar with Single Logical Parent Destination -->
+<div class="breadcrumb-bar">
+    <div class="breadcrumbs">
+        <a href="/rfqs">RFQs</a>
+        <span class="breadcrumb-separator">/</span>
+        <span class="breadcrumb-current">{{ rfq.rfq_id }} &bull; {{ rfq.title }}</span>
+    </div>
+    <div>
+        <a href="/rfqs" class="btn btn-secondary btn-sm">&larr; Back to RFQs</a>
+    </div>
+</div>
+
+<!-- Dominant Page Identity Header Card -->
+<div class="card" style="background: var(--bg-card); border-top: 3px solid var(--accent); padding: 1.25rem; margin-bottom: 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                <span class="badge badge-info">Procurement RFQ Workspace</span>
+                <code style="color: var(--accent); font-weight: 700; font-size: 0.8125rem;">{{ rfq.rfq_id }}</code>
+                {% if rfq.is_demo %}
+                <span class="badge badge-purple">Demo Round</span>
+                {% endif %}
+            </div>
+            <h1 style="font-size: 1.4rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.25rem;">
+                {{ rfq.title }}
+            </h1>
+            <p style="font-size: 0.8125rem; color: var(--text-muted);">
+                Base Sourcing Currency: <strong>{{ rfq.base_currency }}</strong> &bull; Requested Scope: <strong>{{ rfq.items|length }} line items</strong>
+            </p>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <a href="#upload-section" class="btn btn-secondary btn-sm">+ Add Supplier Quotations</a>
+        </div>
+    </div>
+
+    <!-- Key Metrics Ribbon -->
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
+        <div style="background: var(--bg-card-subtle); padding: 0.85rem 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+            <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Requested Scope</div>
+            <div style="font-size: 1.1rem; font-weight: 800; color: var(--text-main); font-family: var(--font-mono);">
+                {{ rfq.items|length }} Items
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">Defined in RFQ Scope</div>
+        </div>
+
+        <div style="background: var(--bg-card-subtle); padding: 0.85rem 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+            <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Quotes Received</div>
+            <div style="font-size: 1.1rem; font-weight: 800; color: var(--accent); font-family: var(--font-mono);">
+                {{ total_quotes_count }} Received
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">From independent suppliers</div>
+        </div>
+
+        <div style="background: var(--bg-card-subtle); padding: 0.85rem 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+            <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Comparison Status</div>
+            <div style="font-size: 1.1rem; font-weight: 800; color: {% if ready_count >= 1 %}var(--success){% elif need_review_count > 0 %}var(--warning){% else %}var(--text-muted){% endif %}; font-family: var(--font-mono);">
+                {{ ready_count }} Ready
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">
+                {% if need_review_count > 0 %}{{ need_review_count }} quote(s) need review{% elif ready_count >= 2 %}Ready for multi-vendor evaluation{% elif ready_count == 1 %}1 ready to evaluate{% else %}Awaiting quotations{% endif %}
+            </div>
+        </div>
+
+        <div style="background: var(--bg-card-subtle); padding: 0.85rem 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+            <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Procurement Stage</div>
+            <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-main); margin-top: 0.15rem;">
+                {{ stage_name or next_action.replace('_', ' ').title() }}
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">
+                Stage {{ current_stage or 2 }} of 5
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Compact 5-Step Workflow Progression Stepper (Orientation) -->
+<div class="card" style="padding: 0.75rem 1.25rem; margin-bottom: 1.25rem; background: var(--bg-card); border: 1px solid var(--border-color);">
+    <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+        <!-- Stage 1 -->
+        <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; {% if current_stage >= 1 %}font-weight: 700; color: var(--text-main);{% else %}color: var(--text-muted);{% endif %}">
+            <span class="badge {% if current_stage == 1 %}badge-info{% elif current_stage > 1 %}badge-success{% else %}badge-muted{% endif %}" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">1</span>
+            <span>RFQ Scope ({{ rfq.items|length }} Items)</span>
+        </div>
+        <span style="color: var(--text-subtle);">&rarr;</span>
+
+        <!-- Stage 2 -->
+        <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; {% if current_stage >= 2 %}font-weight: 700; color: var(--text-main);{% else %}color: var(--text-muted);{% endif %}">
+            <span class="badge {% if current_stage == 2 %}badge-info{% elif current_stage > 2 %}badge-success{% else %}badge-muted{% endif %}" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">2</span>
+            <span>Supplier Quotes ({{ total_quotes_count }})</span>
+        </div>
+        <span style="color: var(--text-subtle);">&rarr;</span>
+
+        <!-- Stage 3 -->
+        <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; {% if current_stage == 3 %}font-weight: 700; color: var(--warning);{% elif current_stage > 3 %}font-weight: 700; color: var(--text-main);{% else %}color: var(--text-muted);{% endif %}">
+            <span class="badge {% if current_stage == 3 %}badge-warning{% elif current_stage > 3 %}badge-success{% else %}badge-muted{% endif %}" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">3</span>
+            <span>Review {% if need_review_count > 0 %}({{ need_review_count }}){% endif %}</span>
+        </div>
+        <span style="color: var(--text-subtle);">&rarr;</span>
+
+        <!-- Stage 4 -->
+        <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; {% if current_stage == 4 %}font-weight: 700; color: var(--accent);{% elif current_stage > 4 %}font-weight: 700; color: var(--text-main);{% else %}color: var(--text-muted);{% endif %}">
+            <span class="badge {% if current_stage == 4 %}badge-info{% elif current_stage > 4 %}badge-success{% else %}badge-muted{% endif %}" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">4</span>
+            <span>Comparison</span>
+        </div>
+        <span style="color: var(--text-subtle);">&rarr;</span>
+
+        <!-- Stage 5 -->
+        <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; {% if current_stage == 5 %}font-weight: 700; color: var(--success);{% else %}color: var(--text-muted);{% endif %}">
+            <span class="badge {% if current_stage == 5 %}badge-success{% else %}badge-muted{% endif %}" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">5</span>
+            <span>Award Decision</span>
+        </div>
+    </div>
+</div>
+
+<!-- Dedicated Next-Step Action Guidance Card (Single Clear Primary Action) -->
+{% if award and award.status == 'FINALIZED' %}
+<div class="card" style="border: 2px solid var(--success); background: linear-gradient(135deg, rgba(34, 197, 94, 0.12) 0%, rgba(20, 31, 56, 0.95) 100%); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+    <div>
+        <span class="badge badge-success" style="font-size: 0.75rem; margin-bottom: 0.25rem;">STAGE 5 &bull; AWARD FINALIZED</span>
+        <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text-main);">Commercial Sourcing Award Finalized</h3>
+        <p style="font-size: 0.8125rem; color: var(--text-muted);">{{ action_message }}</p>
+    </div>
+    <div style="display: flex; gap: 0.5rem;">
+        <a href="/rfqs/{{ rfq.rfq_id }}/award" class="btn btn-success" style="padding: 0.6rem 1.5rem; font-size: 0.875rem; font-weight: 700;">
+            View Finalized Award Record &rarr;
+        </a>
+    </div>
+</div>
+{% elif comparison %}
+<div class="card" style="border: 2px solid var(--success); background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(20, 31, 56, 0.9) 100%); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+    <div>
+        <span class="badge badge-success" style="font-size: 0.75rem; margin-bottom: 0.25rem;">STAGE 5 &bull; EVALUATION COMPLETE</span>
+        <h3 style="font-size: 1.1rem; font-weight: 800; color: var(--text-main);">Commercial Award Decision Available</h3>
+        <p style="font-size: 0.8125rem; color: var(--text-muted);">{{ action_message }}</p>
+    </div>
+    <div style="display: flex; gap: 0.5rem;">
+        <a href="/rfqs/{{ rfq.rfq_id }}/award" class="btn btn-success" style="padding: 0.6rem 1.5rem; font-size: 0.875rem; font-weight: 700;">
+            Award Decision &amp; Line Allocation &rarr;
+        </a>
+    </div>
+</div>
+{% elif ready_count >= 2 %}
+<div class="card" style="border: 2px solid var(--success); background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(20, 31, 56, 0.9) 100%); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+    <div>
+        <span class="badge badge-success" style="font-size: 0.75rem; margin-bottom: 0.25rem;">STAGE 4 &bull; READY FOR COMPARISON</span>
+        <h3 style="font-size: 1.1rem; font-weight: 800; color: var(--text-main);">
+            Compare {{ ready_count }} Ready Supplier Quotations
+        </h3>
+        <p style="font-size: 0.8125rem; color: var(--text-muted);">{{ action_message }}</p>
+    </div>
+    <div>
+        <a href="/comparisons/create?rfq_id={{ rfq.rfq_id }}" class="btn btn-success" style="padding: 0.6rem 1.5rem; font-size: 0.875rem;">
+            Run Commercial Comparison &rarr;
+        </a>
+    </div>
+</div>
+{% elif ready_count == 1 %}
+<div class="card" style="border: 2px solid var(--accent); background: linear-gradient(135deg, rgba(56, 189, 248, 0.08) 0%, rgba(20, 31, 56, 0.9) 100%); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+    <div>
+        <span class="badge badge-info" style="font-size: 0.75rem; margin-bottom: 0.25rem;">STAGE 4 &bull; 1 QUOTATION READY</span>
+        <h3 style="font-size: 1.1rem; font-weight: 800; color: var(--text-main);">
+            Evaluate 1 Ready Supplier Quotation
+        </h3>
+        <p style="font-size: 0.8125rem; color: var(--text-muted);">{{ action_message }}</p>
+    </div>
+    <div>
+        <a href="/comparisons/create?rfq_id={{ rfq.rfq_id }}" class="btn btn-success" style="padding: 0.6rem 1.5rem; font-size: 0.875rem;">
+            Evaluate Quotation &rarr;
+        </a>
+    </div>
+</div>
+{% elif total_review_required > 0 or need_review_count > 0 %}
+<div class="card" style="border: 2px solid var(--warning); background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(20, 31, 56, 0.9) 100%); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+    <div>
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+            <span class="badge badge-warning" style="font-size: 0.75rem;">STAGE 3 &bull; BATCH REVIEW REQUIRED</span>
+            <span class="badge badge-muted" style="font-family: var(--font-mono); font-size: 0.75rem;">{{ lines_summary_str }}</span>
+        </div>
+        <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.25rem;">
+            Resolve {{ total_review_required }} Alignment Issues in Batch Queue
+        </h3>
+        <p style="font-size: 0.8125rem; color: var(--text-muted); margin: 0;">
+            {{ total_auto_matched }} lines matched automatically &bull; {{ total_review_required }} ambiguous candidate(s) need human confirmation &bull; {{ total_unmatched }} unmatched lines.
+        </p>
+    </div>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <a href="#quotes-table" class="btn btn-secondary btn-sm">
+            View All Matches
+        </a>
+        <a href="/rfqs/{{ rfq.rfq_id }}/review" class="btn btn-primary" style="padding: 0.6rem 1.5rem; font-size: 0.875rem; font-weight: 700;">
+            Resolve {{ total_review_required }} Review Items &rarr;
+        </a>
+    </div>
+</div>
+{% else %}
+<div class="card" style="border: 1px solid var(--border-color); background: var(--bg-card); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+    <div>
+        <span class="badge badge-muted" style="font-size: 0.75rem; margin-bottom: 0.25rem;">STAGE 2 &bull; SUPPLIER QUOTATIONS PENDING</span>
+        <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-main);">
+            Awaiting Supplier Quotation Uploads
+        </h3>
+        <p style="font-size: 0.8125rem; color: var(--text-muted);">
+            Upload quotation documents received from suppliers to begin automated extraction, product matching, and commercial evaluation.
+        </p>
+    </div>
+    <div>
+        <a href="#upload-section" class="btn btn-primary" style="padding: 0.6rem 1.5rem; font-size: 0.875rem;">
+            + Upload First Quotation &darr;
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<!-- Supplier Quotations Ingestion & Attached Quotes Section -->
+<div class="card" id="upload-section" style="margin-bottom: 1.25rem;">
+    <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem;">
+        <div>
+            <div class="card-title" style="font-size: 1.1rem;">Supplier Quotations</div>
+            <div style="font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.15rem;">
+                Add and manage quotations received from suppliers for this RFQ round.
+            </div>
+        </div>
+        <div>
+            <span class="badge badge-muted" style="font-family: var(--font-mono); font-size: 0.8125rem;">
+                {{ quotes_summary_str }}
+            </span>
+        </div>
+    </div>
+
+    <!-- Multi-Supplier Quotation Ingestion Box -->
+    <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.25rem;">
+        <div style="margin-bottom: 0.85rem;">
+            <h3 style="font-size: 0.9375rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.2rem;">
+                Add Supplier Quotations
+            </h3>
+            <p style="font-size: 0.8125rem; color: var(--text-muted); margin: 0;">
+                Select one or multiple quotation files. Review your selection before extraction. Supported formats: .xlsx, .xls, .csv, .pdf.
+            </p>
+        </div>
+
+        <!-- Initial Drag & Drop / Selection Dropzone -->
+        <div id="quote-dropzone" style="border: 2px dashed var(--border-color); background: var(--bg-card-subtle); border-radius: 8px; padding: 1.75rem 1rem; text-align: center; cursor: pointer; transition: all 0.2s ease;" onclick="document.getElementById('quoteFilesInput').click();" ondragover="handleQuoteDragOver(event)" ondragleave="handleQuoteDragLeave(event)" ondrop="handleQuoteFileDrop(event)">
+            <svg style="width: 38px; height: 38px; color: var(--accent); margin-bottom: 0.5rem;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+            </svg>
+            <div style="font-weight: 700; font-size: 0.9375rem; color: var(--text-main); margin-bottom: 0.25rem;">
+                Click to browse or drag &amp; drop supplier quotation files
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+                Select any number of quotation documents (.xlsx, .xls, .csv, .pdf) in one operation
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" style="pointer-events: none; font-size: 0.75rem;">
+                Browse Quotation Files
+            </button>
+            <input type="file" id="quoteFilesInput" multiple accept=".xlsx,.xls,.csv,.pdf" style="display: none;" onchange="handleQuotationFilesSelected(this)">
+        </div>
+
+        <!-- Staging / Pre-Parse Confirmation Review Panel (Hidden until files are selected) -->
+        <div id="staged-quotes-panel" style="display: none; margin-top: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                <div>
+                    <strong id="staged-count-heading" style="color: var(--text-main); font-size: 0.9375rem;">
+                        Selected Quotations (0)
+                    </strong>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">
+                        Review your selected quotation files before starting the extraction pipeline.
+                    </div>
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button type="button" onclick="document.getElementById('quoteFilesInput').click();" class="btn btn-secondary btn-sm" style="font-size: 0.75rem;">
+                        + Add More Files
+                    </button>
+                    <button type="button" onclick="clearAllStagedFiles();" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; color: var(--danger);">
+                        Clear All
+                    </button>
+                </div>
+            </div>
+
+            <!-- Staged Files Table -->
+            <div style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 1rem; background: var(--bg-card);">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 40px; text-align: center;">✓</th>
+                            <th style="min-width: 220px;">Filename</th>
+                            <th style="width: 80px;">Format</th>
+                            <th style="width: 90px;">Size</th>
+                            <th style="min-width: 180px;">Supplier Name (Optional)</th>
+                            <th style="width: 90px; text-align: right;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="staged-files-tbody">
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- In-flight Progress Box (Hidden by default) -->
+            <div id="upload-progress-box" style="display: none; background: rgba(56, 189, 248, 0.08); border: 1px solid var(--accent); border-radius: 6px; padding: 0.85rem 1rem; margin-bottom: 1rem;">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <div class="btn-spinner" style="border-color: var(--accent); border-top-color: transparent; width: 18px; height: 18px;"></div>
+                    <div>
+                        <strong style="color: var(--text-main); font-size: 0.8125rem;" id="upload-progress-text">
+                            Uploading and extracting quotations...
+                        </strong>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">
+                            Extracting line items, commercial terms, and running Item Master alignment.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error Banner (Hidden by default) -->
+            <div id="upload-error-box" style="display: none; background: rgba(239, 68, 68, 0.08); border: 1px solid var(--danger); border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 1rem;">
+                <div id="upload-error-text" style="color: var(--danger); font-size: 0.8125rem; font-weight: 600;"></div>
+            </div>
+
+            <!-- Action Bar -->
+            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 0.75rem;">
+                <button type="button" onclick="clearAllStagedFiles();" class="btn btn-secondary btn-sm" id="btn-cancel-staged">
+                    Cancel
+                </button>
+                <button type="button" onclick="submitStagedQuotations();" class="btn btn-primary" id="btn-submit-staged" style="padding: 0.6rem 1.4rem; font-size: 0.875rem;">
+                    Upload &amp; Extract Quotations &rarr;
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Attached Quotations Table -->
+    {% if quotes and quotes|length > 0 %}
+    <div id="quotes-table" style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th style="min-width: 200px;">Supplier</th>
+                    <th style="min-width: 260px;">RFQ Scope Coverage</th>
+                    <th style="width: 120px;">Extraction</th>
+                    <th style="width: 180px;">Status</th>
+                    <th style="width: 150px; text-align: right;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for q in quotes %}
+                <tr>
+                    <td>
+                        <strong style="color: var(--text-main); font-size: 0.9375rem;">
+                            {{ q.supplier_name if q.supplier_name != '—' else q.test_name }}
+                        </strong>
+                        <div style="font-size: 0.75rem; color: var(--accent); font-family: var(--font-mono);">
+                            {{ q.test_id }}
+                        </div>
+                    </td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <strong style="color: var(--text-main); font-size: 0.9375rem; font-family: var(--font-mono);">
+                                {{ q.scope_coverage_str }}
+                            </strong>
+                            {% if q.coverage_state == 'COMPLETE' %}
+                                <span class="badge badge-success" style="font-size: 0.65rem;">100% Scope</span>
+                            {% elif q.coverage_state == 'PARTIAL' %}
+                                <span class="badge badge-info" style="font-size: 0.65rem;">Partial Scope</span>
+                            {% elif q.processing_status == 'REVIEW_NEEDED' %}
+                                <span class="badge badge-warning" style="font-size: 0.65rem;">Review Needed</span>
+                            {% endif %}
+                        </div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; line-height: 1.35;">
+                            <span>{{ q.lines_extracted_count }} supplier lines extracted</span> &bull; 
+                            <strong style="color: var(--text-main);">{{ q.rfq_items_matched }} matched to RFQ</strong>
+                            {% if q.extra_lines_count > 0 %}
+                                &bull; <span style="color: var(--text-muted);">{{ q.extra_lines_count }} unmatched / extra</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        {% if q.status == 'SUCCESS' and q.lines_extracted_count == 0 %}
+                            <span class="badge badge-warning" style="font-size: 0.7rem;">Extraction completed — 0 usable lines</span>
+                        {% elif q.status == 'SUCCESS' %}
+                            <span class="badge badge-success">Extracted ({{ q.lines_extracted_count }})</span>
+                        {% else %}
+                            <span class="badge badge-muted">Received</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if q.processing_status == 'READY_FOR_COMPARISON' %}
+                            <span class="badge badge-success">Ready for Comparison</span>
+                        {% elif q.processing_status == 'REVIEW_NEEDED' %}
+                            <span class="badge badge-warning">Review Needed ({{ q.review_count }})</span>
+                        {% elif q.processing_status == 'NO_MATCHED_ITEMS' %}
+                            <span class="badge badge-muted">0 RFQ Items Matched</span>
+                        {% else %}
+                            <span class="badge badge-muted">Received</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: right;">
+                        <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end;">
+                            <a href="/quotes/{{ q.test_id }}" class="btn btn-secondary btn-sm">
+                                View Data
+                            </a>
+                            {% if q.review_count > 0 %}
+                            <a href="/rfqs/{{ rfq.rfq_id }}/review" class="btn btn-primary btn-sm">
+                                Review Queue ({{ q.review_count }})
+                            </a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="text-align: center; padding: 2.5rem 1rem; color: var(--text-muted);">
+        <h4 style="font-size: 1rem; color: var(--text-main); margin-bottom: 0.25rem;">No Quotations Uploaded Yet</h4>
+        <p style="font-size: 0.8125rem; max-width: 480px; margin: 0 auto 1rem auto;">
+            Use the form above to upload quotation documents received from vendors (.xlsx, .csv, .pdf).
+        </p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Requested Scope Table -->
+<div class="card">
+    <div class="card-header">
+        <div>
+            <div class="card-title">Requested RFQ Scope &amp; Specifications</div>
+            <div style="font-size: 0.8125rem; color: var(--text-muted);">
+                Target items and quantities requested from suppliers in this procurement round.
+            </div>
+        </div>
+        <div>
+            <span class="badge badge-muted">{{ rfq.items|length }} Line Items</span>
+        </div>
+    </div>
+
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 110px;">Line #</th>
+                    <th style="width: 140px;">Company SKU</th>
+                    <th>Specification / Description</th>
+                    <th style="width: 130px; text-align: right;">Requested Qty</th>
+                    <th style="width: 80px;">UOM</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in rfq.items %}
+                <tr>
+                    <td><code style="color: var(--accent); font-weight: 700;">{{ item.rfq_line_id }}</code></td>
+                    <td><code style="color: var(--text-main);">{{ item.sku }}</code></td>
+                    <td>
+                        <div style="font-weight: 600; color: var(--text-main);">{{ item.description }}</div>
+                    </td>
+                    <td style="text-align: right; font-family: var(--font-mono); font-weight: 700;">{{ item.requested_quantity }}</td>
+                    <td><span class="badge badge-info">{{ item.requested_uom }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    let stagedQuoteFiles = [];
+
+    function formatFileSize(bytes) {
+        if (!bytes || bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    function getFormatBadge(filename) {
+        const ext = filename.split('.').pop().toLowerCase();
+        if (ext === 'xlsx') return '<span class="badge badge-success">XLSX</span>';
+        if (ext === 'xls') return '<span class="badge badge-info">XLS</span>';
+        if (ext === 'csv') return '<span class="badge badge-info">CSV</span>';
+        if (ext === 'pdf') return '<span class="badge badge-purple">PDF</span>';
+        return '<span class="badge badge-warning">' + ext.toUpperCase() + '</span>';
+    }
+
+    function inferSupplierNameFromFilename(filename) {
+        let base = filename.replace(/\.[^/.]+$/, "");
+        base = base.replace(/[_-]+/g, " ").trim();
+        base = base.replace(/\b(quote|quotation|rfq|pricing|offer|proposal|bid)\b/gi, "").trim();
+        if (!base) base = filename.replace(/\.[^/.]+$/, "");
+        return base.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ').trim();
+    }
+
+    function handleQuoteDragOver(e) {
+        e.preventDefault();
+        const dropzone = document.getElementById('quote-dropzone');
+        if (dropzone) dropzone.style.borderColor = 'var(--accent)';
+    }
+
+    function handleQuoteDragLeave(e) {
+        e.preventDefault();
+        const dropzone = document.getElementById('quote-dropzone');
+        if (dropzone) dropzone.style.borderColor = 'var(--border-color)';
+    }
+
+    function handleQuoteFileDrop(e) {
+        e.preventDefault();
+        const dropzone = document.getElementById('quote-dropzone');
+        if (dropzone) dropzone.style.borderColor = 'var(--border-color)';
+        if (e.dataTransfer && e.dataTransfer.files) {
+            addSelectedFiles(e.dataTransfer.files);
+        }
+    }
+
+    function handleQuotationFilesSelected(input) {
+        if (input.files && input.files.length > 0) {
+            addSelectedFiles(input.files);
+            input.value = '';
+        }
+    }
+
+    function addSelectedFiles(fileList) {
+        for (let i = 0; i < fileList.length; i++) {
+            const file = fileList[i];
+            const alreadyExists = stagedQuoteFiles.some(item => item.file.name === file.name && item.file.size === file.size);
+            if (!alreadyExists) {
+                stagedQuoteFiles.push({
+                    file: file,
+                    supplierName: inferSupplierNameFromFilename(file.name)
+                });
+            }
+        }
+        renderStagedFiles();
+    }
+
+    function removeStagedFile(idx) {
+        stagedQuoteFiles.splice(idx, 1);
+        renderStagedFiles();
+    }
+
+    function clearAllStagedFiles() {
+        stagedQuoteFiles = [];
+        const errorBox = document.getElementById('upload-error-box');
+        if (errorBox) errorBox.style.display = 'none';
+        renderStagedFiles();
+    }
+
+    function renderStagedFiles() {
+        const panel = document.getElementById('staged-quotes-panel');
+        const heading = document.getElementById('staged-count-heading');
+        const tbody = document.getElementById('staged-files-tbody');
+        const btnSubmit = document.getElementById('btn-submit-staged');
+
+        if (!panel || !tbody) return;
+
+        if (stagedQuoteFiles.length === 0) {
+            panel.style.display = 'none';
+            return;
+        }
+
+        panel.style.display = 'block';
+        heading.innerText = `Selected Quotations (${stagedQuoteFiles.length})`;
+        btnSubmit.innerText = `Upload & Extract ${stagedQuoteFiles.length} Quotation${stagedQuoteFiles.length > 1 ? 's' : ''} →`;
+
+        tbody.innerHTML = '';
+        stagedQuoteFiles.forEach((item, idx) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="text-align: center; color: var(--success); font-weight: 700;">✓</td>
+                <td>
+                    <strong style="color: var(--text-main); font-size: 0.875rem;">${item.file.name}</strong>
+                </td>
+                <td>${getFormatBadge(item.file.name)}</td>
+                <td style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted);">${formatFileSize(item.file.size)}</td>
+                <td>
+                    <input type="text" value="${item.supplierName}" oninput="stagedQuoteFiles[${idx}].supplierName = this.value" placeholder="e.g. Supplier Name" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; width: 100%;">
+                </td>
+                <td style="text-align: right;">
+                    <button type="button" onclick="removeStagedFile(${idx})" class="btn btn-secondary btn-sm" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; color: var(--danger);">
+                        Remove
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    async function submitStagedQuotations() {
+        if (stagedQuoteFiles.length === 0) return;
+
+        const btnSubmit = document.getElementById('btn-submit-staged');
+        const btnCancel = document.getElementById('btn-cancel-staged');
+        const progressBox = document.getElementById('upload-progress-box');
+        const progressText = document.getElementById('upload-progress-text');
+        const errorBox = document.getElementById('upload-error-box');
+        const errorText = document.getElementById('upload-error-text');
+
+        if (btnSubmit) btnSubmit.disabled = true;
+        if (btnCancel) btnCancel.disabled = true;
+        if (errorBox) errorBox.style.display = 'none';
+
+        if (progressBox && progressText) {
+            progressBox.style.display = 'block';
+            progressText.innerText = `Uploading and extracting ${stagedQuoteFiles.length} quotation(s)...`;
+        }
+
+        const formData = new FormData();
+        stagedQuoteFiles.forEach(item => {
+            formData.append('files', item.file);
+            formData.append('supplier_names', item.supplierName || '');
+        });
+
+        try {
+            const res = await fetch('/rfqs/{{ rfq.rfq_id }}/upload-quotes', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+
+            const data = await res.json();
+            if (data.status === 'success' || (data.results && data.results.length > 0)) {
+                if (data.failed && data.failed.length > 0) {
+                    const failMsgs = data.failed.map(f => `${f.filename}: ${f.error}`).join('; ');
+                    alert(`Processed ${data.processed_count} quotations successfully. Errors encountered for: ${failMsgs}`);
+                }
+                window.location.reload();
+            } else {
+                throw new Error(data.message || 'Failed to process selected quotations');
+            }
+        } catch (err) {
+            if (progressBox) progressBox.style.display = 'none';
+            if (btnSubmit) btnSubmit.disabled = false;
+            if (btnCancel) btnCancel.disabled = false;
+            if (errorBox && errorText) {
+                errorBox.style.display = 'block';
+                errorText.innerText = 'Upload error: ' + err.message;
+            }
+        }
+    }
+</script>
+{% endblock %}

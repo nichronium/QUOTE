@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Commercial Comparisons &amp; Rankings — Quote Intelligence{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+    <div>
+        <h1 style="font-size: 1.25rem; font-weight: 700;">⚖️ Commercial Comparisons &amp; Rankings</h1>
+        <p style="font-size: 0.8125rem; color: var(--text-muted);">
+            Auditable multi-supplier comparison matrices, currency normalization, freight allocation, L1/L2 rankings, and split-sourcing optimizations.
+        </p>
+    </div>
+    <div>
+        <a href="/comparisons/create" class="btn btn-primary btn-sm">+ Create New Comparison</a>
+    </div>
+</div>
+
+<div class="card">
+    {% if comparisons %}
+    <table>
+        <thead>
+            <tr>
+                <th>Comparison ID</th>
+                <th>RFQ Reference</th>
+                <th>Suppliers</th>
+                <th>L1 Ranked Supplier</th>
+                <th>L1 Landed Cost</th>
+                <th>Created At</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in comparisons %}
+            <tr>
+                <td><code style="color: #e879f9; font-weight: 700;">{{ c.comparison_id }}</code></td>
+                <td><code style="color: var(--success);">{{ c.rfq_id }}</code></td>
+                <td>{{ c.supplier_count }} suppliers</td>
+                <td><strong style="color: var(--success);">{{ c.l1_supplier }}</strong></td>
+                <td style="font-family: var(--font-mono); font-weight: 600;">
+                    {% if c.l1_landed_cost != '—' %}
+                        {{ c.base_currency }} {{ c.l1_landed_cost }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td style="font-size: 0.75rem; color: var(--text-muted);">{{ c.created_at[:19] if c.created_at else "—" }}</td>
+                <td>
+                    <a href="/comparisons/{{ c.comparison_id }}" class="btn btn-primary btn-sm">Open Matrix &rarr;</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
+        <p>No multi-supplier comparisons evaluated yet.</p>
+        <a href="/comparisons/create" class="btn btn-primary btn-sm" style="margin-top: 0.5rem;">+ Create Your First Comparison</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}\n

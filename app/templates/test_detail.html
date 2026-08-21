@@ -1,0 +1,558 @@
+{% extends "base.html" %}
+
+{% block title %}{{ test.test_name }} ({{ test.test_id }}) — Extraction Lab{% endblock %}
+
+{% block content %}
+<!-- Top Action Bar -->
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; background-color: var(--bg-secondary); padding: 0.75rem 1.25rem; border-radius: 8px; border: 1px solid var(--border-color);">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <span style="font-family: var(--font-mono); font-size: 0.875rem; color: var(--accent); font-weight: 700;">{{ test.test_id }}</span>
+        <h1 style="font-size: 1.125rem; font-weight: 700;">{{ test.test_name }}</h1>
+        
+        {% if test.status == 'SUCCESS' %}
+            {% if report and report.overall_status == 'RECONCILED' %}
+                <span class="badge badge-success">✓ RECONCILED</span>
+            {% elif report and report.overall_status == 'CALCULATED_ONLY' %}
+                <span class="badge badge-info">ℹ CALCULATED ONLY</span>
+            {% elif report and report.overall_status == 'DISCREPANCY' %}
+                <span class="badge badge-danger">✕ DISCREPANCY</span>
+            {% elif report and report.overall_status == 'REVIEW_REQUIRED' %}
+                <span class="badge badge-warning">⚠ REVIEW REQUIRED</span>
+            {% elif report and report.overall_status == 'INSUFFICIENT_DATA' %}
+                <span class="badge badge-danger">✕ INSUFFICIENT DATA</span>
+            {% else %}
+                <span class="badge badge-info">EXTRACTION COMPLETE</span>
+            {% endif %}
+
+        {% elif test.status == 'FAILED' %}
+            <span class="badge badge-danger">Extraction Failed</span>
+        {% elif test.status == 'READY' %}
+            <span class="badge badge-warning">File Uploaded</span>
+        {% else %}
+            <span class="badge badge-muted">Draft</span>
+        {% endif %}
+
+        {% if test.has_corrections %}
+            <span class="badge badge-info" title="Contains human field overrides">✎ Human Corrected</span>
+        {% endif %}
+    </div>
+
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <button onclick="document.getElementById('rename-dialog').style.display = 'block';" class="btn btn-secondary btn-sm">✏️ Rename</button>
+        
+        <form action="/tests/{{ test.test_id }}/reset" method="POST" onsubmit="return confirm('Reset this test? The original source document will NOT be deleted, but extracted output will be cleared.');">
+            <button type="submit" class="btn btn-secondary btn-sm">🔄 Reset Output</button>
+        </form>
+
+        <form action="/tests/{{ test.test_id }}/delete" method="POST" onsubmit="return confirm('Permanently delete test {{ test.test_id }}?');">
+            <button type="submit" class="btn btn-danger btn-sm">🗑️ Delete</button>
+        </form>
+    </div>
+</div>
+
+<!-- Rename Dialog -->
+<div id="rename-dialog" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 50; align-items: center; justify-content: center;">
+    <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.5rem; max-width: 400px; margin: 10% auto;">
+        <h3 style="margin-bottom: 0.75rem;">Rename Test</h3>
+        <form action="/tests/{{ test.test_id }}/rename" method="POST">
+            <input type="text" name="new_name" value="{{ test.test_name }}" required style="margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+                <button type="button" onclick="document.getElementById('rename-dialog').style.display='none';" class="btn btn-secondary btn-sm">Cancel</button>
+                <button type="submit" class="btn btn-primary btn-sm">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Main Split Container: Left (Input) | Right (Output) -->
+<div style="display: grid; grid-template-columns: 400px 1fr; gap: 1.5rem; align-items: start;">
+
+    <!-- ==================== LEFT / INPUT PANEL ==================== -->
+    <div class="card" style="border-top: 3px solid var(--accent);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h2 style="font-size: 0.9375rem; font-weight: 700; text-transform: uppercase; color: var(--accent); letter-spacing: 0.05em;">
+                📥 1. Input Document
+            </h2>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Immutable Source</span>
+        </div>
+
+        {% if not has_source %}
+        <div style="border: 2px dashed var(--border-color); padding: 2rem 1rem; text-align: center; border-radius: 6px; margin-bottom: 1rem;">
+            <p style="font-size: 0.875rem; margin-bottom: 0.75rem; color: var(--text-muted);">Upload quotation file (.pdf, .xlsx, .xls, .csv)</p>
+            <form action="/tests/{{ test.test_id }}/upload" method="POST" enctype="multipart/form-data">
+                <input type="file" name="file" accept=".pdf,.xlsx,.xls,.csv" required style="margin-bottom: 0.75rem; font-size: 0.8125rem;">
+                <button type="submit" class="btn btn-primary btn-sm" style="width: 100%; justify-content: center;">
+                    📤 Upload Source File
+                </button>
+            </form>
+        </div>
+        {% else %}
+        <div style="background: rgba(15, 23, 42, 0.4); padding: 0.875rem; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 1rem; font-size: 0.8125rem;">
+            <div style="margin-bottom: 0.35rem; display: flex; justify-content: space-between;">
+                <span style="color: var(--text-muted);">File Name:</span>
+                <strong style="color: var(--text-main); word-break: break-all;">{{ test.source_file_name }}</strong>
+            </div>
+            <div style="margin-bottom: 0.35rem; display: flex; justify-content: space-between;">
+                <span style="color: var(--text-muted);">File Size:</span>
+                <span>{{ (test.source_file_size_bytes / 1024)|round(1) }} KB</span>
+            </div>
+            <div style="margin-bottom: 0.35rem; display: flex; justify-content: space-between;">
+                <span style="color: var(--text-muted);">SHA256:</span>
+                <span style="font-family: var(--font-mono); font-size: 0.75rem;" title="{{ test.source_file_hash }}">{{ test.source_file_hash[:12] if test.source_file_hash else "—" }}</span>
+            </div>
+            <div style="margin-bottom: 0.35rem; display: flex; justify-content: space-between;">
+                <span style="color: var(--text-muted);">Parser Used:</span>
+                <span>{{ test.parser_used or "—" }}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+                <span style="color: var(--text-muted);">Execution Time:</span>
+                <span>{{ test.processing_time_seconds }}s</span>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+            <form action="/tests/{{ test.test_id }}/process" method="POST" style="flex: 1;">
+                <button type="submit" class="btn btn-primary btn-sm" style="width: 100%; justify-content: center;">
+                    {% if test.status == 'SUCCESS' %}🔄 Re-run Extraction{% else %}⚡ Run Extraction{% endif %}
+                </button>
+            </form>
+            <a href="/tests/{{ test.test_id }}/source" target="_blank" class="btn btn-secondary btn-sm" title="Open original immutable file">
+                ↗ View Original
+            </a>
+        </div>
+
+        {% if test.source_file_name and test.source_file_name.lower().endswith('.pdf') %}
+        <div style="margin-top: 1rem;">
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.35rem;">PDF Document Preview:</div>
+            <iframe src="/tests/{{ test.test_id }}/source" style="width: 100%; height: 420px; border-radius: 6px; border: 1px solid var(--border-color); background: #fff;"></iframe>
+        </div>
+        {% elif test.source_file_name %}
+        <div style="padding: 1.5rem; text-align: center; background: rgba(15, 23, 42, 0.3); border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.8125rem; color: var(--text-muted);">
+            📊 Data Spreadsheet (Multi-sheet Profiler & Table Classifier Active)
+            <div style="margin-top: 0.5rem;">
+                <a href="/tests/{{ test.test_id }}/source" class="btn btn-secondary btn-sm">Download Source File</a>
+            </div>
+        </div>
+        {% endif %}
+
+        <details style="margin-top: 1rem; font-size: 0.75rem; color: var(--text-muted);">
+            <summary style="cursor: pointer;">Replace Source Document</summary>
+            <form action="/tests/{{ test.test_id }}/upload" method="POST" enctype="multipart/form-data" style="margin-top: 0.5rem;">
+                <input type="file" name="file" accept=".pdf,.xlsx,.xls,.csv" required style="font-size: 0.75rem; margin-bottom: 0.4rem;">
+                <button type="submit" class="btn btn-secondary btn-sm" style="width: 100%;">Upload New File</button>
+            </form>
+        </details>
+        {% endif %}
+    </div>
+
+
+    <!-- ==================== RIGHT / OUTPUT PANEL ==================== -->
+    <div class="card" style="border-top: 3px solid var(--success);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h2 style="font-size: 0.9375rem; font-weight: 700; text-transform: uppercase; color: var(--success); letter-spacing: 0.05em;">
+                📊 2. Extracted Canonical Quote
+            </h2>
+            {% if quote %}
+            <div style="display: flex; gap: 0.5rem;">
+                <a href="/tests/{{ test.test_id }}/json" target="_blank" class="btn btn-secondary btn-sm">📄 Raw JSON API</a>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if test.status == 'FAILED' %}
+        <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid var(--danger); border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
+            <h3 style="color: var(--danger); font-size: 0.9375rem; margin-bottom: 0.35rem;">⚠️ Extraction Failed</h3>
+            <p style="font-size: 0.8125rem; margin-bottom: 0.5rem;"><strong>Failed Stage:</strong> {{ test.last_stage }}</p>
+            <p style="font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.75rem;">{{ test.error_message }}</p>
+            {% if test.error_traceback %}
+            <details style="font-size: 0.75rem;">
+                <summary style="cursor: pointer; color: var(--accent);">View Technical Traceback</summary>
+                <pre style="margin-top: 0.5rem; font-size: 0.75rem;">{{ test.error_traceback }}</pre>
+            </details>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if not quote %}
+            {% if test.status != 'FAILED' %}
+            <div style="text-align: center; padding: 4rem 1rem; color: var(--text-muted);">
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">⚙️</div>
+                <p style="font-size: 0.9375rem; font-weight: 600; margin-bottom: 0.25rem;">No Extracted Data Yet</p>
+                <p style="font-size: 0.8125rem;">Upload a quotation file on the left and click <strong>Run Extraction</strong> to process.</p>
+            </div>
+            {% endif %}
+        {% else %}
+
+        <!-- Header Summary Ribbon -->
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; background: rgba(15, 23, 42, 0.6); padding: 0.875rem; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 1.25rem; font-size: 0.8125rem;">
+            <div>
+                <span style="color: var(--text-muted); font-size: 0.75rem; display: block;">Supplier</span>
+                <strong style="color: var(--text-main); font-size: 0.875rem;">{{ quote.supplier_raw_name }}</strong>
+            </div>
+            <div>
+                <span style="color: var(--text-muted); font-size: 0.75rem; display: block;">Quote #</span>
+                <strong>{{ quote.quote_number or "—" }}</strong>
+            </div>
+            <div>
+                <span style="color: var(--text-muted); font-size: 0.75rem; display: block;">Date</span>
+                <strong>{{ quote.quote_date or "—" }}</strong>
+            </div>
+            <div>
+                <span style="color: var(--text-muted); font-size: 0.75rem; display: block;">Currency</span>
+                <strong>{{ quote.currency }}</strong>
+            </div>
+            <div>
+                <span style="color: var(--text-muted); font-size: 0.75rem; display: block;">Total Landed Cost</span>
+                <strong style="color: var(--accent); font-size: 0.9375rem;">
+                    {{ quote.currency }} {{ report.total_landed_cost if report else "—" }}
+                </strong>
+            </div>
+        </div>
+
+        {% set terms_count = (1 if quote.payment_terms else 0) + (1 if quote.delivery_terms else 0) + (quote.additional_charges|length) %}
+
+        <!-- Output Tabs Navigation -->
+        <div style="display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border-color); margin-bottom: 1rem;">
+            <button onclick="switchTab('items-tab')" id="tab-btn-items" class="nav-link active" style="border: none; cursor: pointer;">
+                📋 Line Items ({{ quote.items|length }})
+            </button>
+            <button onclick="switchTab('json-tab')" id="tab-btn-json" class="nav-link" style="border: none; cursor: pointer;">
+                📄 Raw Canonical JSON
+            </button>
+            <button onclick="switchTab('terms-tab')" id="tab-btn-terms" class="nav-link" style="border: none; cursor: pointer;">
+                📑 Terms & Surcharges ({{ terms_count }})
+            </button>
+            <button onclick="switchTab('warnings-tab')" id="tab-btn-warnings" class="nav-link" style="border: none; cursor: pointer;">
+                ⚠️ Validation & Math ({{ quote.extraction_metadata.warnings|length }})
+            </button>
+        </div>
+
+        <!-- Tab 1: Line Items Table -->
+        <div id="items-tab" class="tab-pane">
+            {% if quote.items %}
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 30px;">#</th>
+                        <th>Description</th>
+                        <th>Part #</th>
+                        <th>Qty</th>
+                        <th>UOM</th>
+                        <th>Rate</th>
+                        <th>Disc %</th>
+                        <th>Tax %</th>
+                        <th>Landed Total</th>
+                        <th>Tiers</th>
+                        <th>Cell</th>
+                        <th>Confidence</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in quote.items %}
+                    <tr>
+                        <td style="color: var(--text-muted);">{{ item.line_index + 1 }}</td>
+                        <td>
+                            <strong style="display: block;">{{ item.raw_description }}</strong>
+                        </td>
+                        <td><code style="font-size: 0.75rem;">{{ item.supplier_part_number or "—" }}</code></td>
+                        <td>{{ item.quoted_qty }}</td>
+                        <td><span class="badge badge-info">{{ item.quoted_uom }}</span></td>
+                        <td>{{ item.unit_price }}</td>
+                        <td>{{ item.discount_pct }}%</td>
+                        <td>{{ item.tax_rate_pct }}%</td>
+                        <td style="color: var(--accent); font-weight: 600;">
+                            {{ item.calculate_line_landed_cost() }}
+                        </td>
+                        <td>
+                            {% if item.price_tiers|length > 0 %}
+                                <span class="badge badge-success" title="Contains {{ item.price_tiers|length }} volume price tiers">{{ item.price_tiers|length }} Tiers</span>
+                            {% else %}
+                                <span style="color: var(--text-muted); font-size: 0.75rem;">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.provenance and item.provenance.cell_ref %}
+                                <span class="badge badge-muted" title="{{ item.provenance.source_text }}">{{ item.provenance.cell_ref }}</span>
+                            {% else %}
+                                <span style="color: var(--text-muted); font-size: 0.75rem;">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.confidence_score is not none %}
+                                <span class="badge {% if item.confidence_score >= 0.85 %}badge-success{% else %}badge-warning{% endif %}">
+                                    {{ (item.confidence_score * 100)|round|int }}%
+                                </span>
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button onclick="openCorrectionModal({{ item.line_index }}, '{{ item.raw_description|replace("'", "\\'") }}', '{{ item.quoted_qty }}', '{{ item.quoted_uom }}', '{{ item.unit_price }}', '{{ item.tax_rate_pct }}', '{{ item.supplier_part_number or "" }}')" class="btn btn-secondary btn-sm" style="padding: 0.2rem 0.4rem; font-size: 0.6875rem;">
+                                ✎ Edit
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p style="color: var(--warning); padding: 1rem 0;">No line items detected.</p>
+            {% endif %}
+        </div>
+
+        <!-- Tab 2: Raw Canonical JSON -->
+        <div id="json-tab" class="tab-pane" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <span style="font-size: 0.75rem; color: var(--text-muted);">Pydantic CanonicalQuote V1 representation:</span>
+                <button onclick="navigator.clipboard.writeText(document.getElementById('raw-json-code').innerText); alert('Copied JSON to clipboard!');" class="btn btn-secondary btn-sm">
+                    📋 Copy JSON
+                </button>
+            </div>
+            <pre><code id="raw-json-code">{{ raw_json }}</code></pre>
+        </div>
+
+        <!-- Tab 3: Terms & Additional Charges -->
+        <div id="terms-tab" class="tab-pane" style="display: none;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                <div style="background: rgba(15, 23, 42, 0.4); padding: 1rem; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <h3 style="font-size: 0.875rem;">💳 Payment Terms</h3>
+                        {% if quote.payment_terms %}
+                            <span class="badge badge-success">Detected</span>
+                        {% else %}
+                            <span class="badge badge-muted">Not Found</span>
+                        {% endif %}
+                    </div>
+                    {% if quote.payment_terms %}
+                        <p style="font-size: 0.8125rem; margin-bottom: 0.25rem;">
+                            <strong>Credit Period:</strong> 
+                            {% if quote.payment_terms.credit_days %}
+                                <span class="badge badge-info">{{ quote.payment_terms.credit_days }} Days</span>
+                            {% else %}
+                                <span>{{ quote.payment_terms.raw_text }}</span>
+                            {% endif %}
+                        </p>
+                        {% if quote.payment_terms.advance_pct %}
+                        <p style="font-size: 0.8125rem; margin-bottom: 0.25rem;"><strong>Advance Required:</strong> {{ quote.payment_terms.advance_pct }}%</p>
+                        {% endif %}
+                        <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;"><strong>Source Text:</strong> {{ quote.payment_terms.raw_text }}</p>
+                    {% else %}
+                        <p style="font-size: 0.8125rem; color: var(--text-muted);">No payment terms extracted.</p>
+                    {% endif %}
+                </div>
+
+                <div style="background: rgba(15, 23, 42, 0.4); padding: 1rem; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <h3 style="font-size: 0.875rem;">🚚 Delivery Terms</h3>
+                        {% if quote.delivery_terms %}
+                            <span class="badge badge-success">Detected</span>
+                        {% else %}
+                            <span class="badge badge-muted">Not Found</span>
+                        {% endif %}
+                    </div>
+                    {% if quote.delivery_terms %}
+                        <p style="font-size: 0.8125rem; margin-bottom: 0.25rem;">
+                            <strong>Lead Time:</strong> 
+                            {% if quote.delivery_terms.lead_time_days_default %}
+                                <span class="badge badge-info">{{ quote.delivery_terms.lead_time_days_default }} Days</span>
+                            {% else %}
+                                <span>{{ quote.delivery_terms.raw_text }}</span>
+                            {% endif %}
+                        </p>
+                        {% if quote.delivery_terms.incoterm %}
+                        <p style="font-size: 0.8125rem; margin-bottom: 0.25rem;"><strong>Incoterm:</strong> <span class="badge badge-info">{{ quote.delivery_terms.incoterm }}</span></p>
+                        {% endif %}
+                        <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;"><strong>Source Text:</strong> {{ quote.delivery_terms.raw_text }}</p>
+                    {% else %}
+                        <p style="font-size: 0.8125rem; color: var(--text-muted);">No delivery terms extracted.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <h3 style="font-size: 0.875rem; margin-bottom: 0.5rem;">📦 Additional Charges (Freight, Packing, Insurance)</h3>
+            {% if quote.additional_charges %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Amount</th>
+                        <th>Tax Rate %</th>
+                        <th>Total with Tax</th>
+                        <th>Source Location</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ch in quote.additional_charges %}
+                    <tr>
+                        <td><span class="badge badge-info">{{ ch.charge_type }}</span></td>
+                        <td>{{ ch.amount }}</td>
+                        <td>{{ ch.tax_rate_pct }}%</td>
+                        <td><strong>{{ ch.total_with_tax }}</strong></td>
+                        <td style="color: var(--text-muted); font-size: 0.75rem;">
+                            {% if ch.provenance %}
+                                {{ ch.provenance.sheet_name or 'P' ~ (ch.provenance.page_number or 1) }}: {{ ch.provenance.source_text }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p style="font-size: 0.8125rem; color: var(--text-muted);">No additional surcharges extracted from this quotation.</p>
+            {% endif %}
+        </div>
+
+        <!-- Tab 4: Warnings & Financial Reconciliation -->
+        <div id="warnings-tab" class="tab-pane" style="display: none;">
+            <h3 style="font-size: 0.875rem; margin-bottom: 0.5rem;">📊 Financial Reconciliation Summary</h3>
+            <div style="background: rgba(15, 23, 42, 0.4); padding: 1rem; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 1.5rem; font-size: 0.8125rem;">
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;">
+                    <div>
+                        <span style="color: var(--text-muted); font-size: 0.75rem; display: block;">Expected Calculated Landed Total</span>
+                        <strong style="color: var(--accent); font-size: 1.05rem;">
+                            {{ quote.currency }} {{ report.calculated_expected_total if report else quote.calculate_total_landed_cost() }}
+                        </strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-muted); font-size: 0.75rem; display: block;">Supplier-Stated Total</span>
+                        <strong style="font-size: 1.05rem;">
+                            {% if report and report.supplier_stated_grand_total %}
+                                {{ quote.currency }} {{ report.supplier_stated_grand_total }}
+                            {% else %}
+                                <span style="color: var(--text-muted); font-size: 0.75rem; font-style: italic;">NOT FOUND</span>
+                            {% endif %}
+                        </strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-muted); font-size: 0.75rem; display: block;">Difference / Discrepancy</span>
+                        <strong>
+                            {% if report and report.discrepancy is not none %}
+                                {{ quote.currency }} {{ report.discrepancy }}
+                            {% else %}
+                                <span style="color: var(--text-muted); font-size: 0.75rem;">N/A</span>
+                            {% endif %}
+                        </strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-muted); font-size: 0.75rem; display: block;">Reconciliation Status</span>
+                        {% if report and report.overall_status == 'RECONCILED' %}
+                            <span class="badge badge-success">✓ RECONCILED</span>
+                        {% elif report and report.overall_status == 'CALCULATED_ONLY' %}
+                            <span class="badge badge-info">ℹ CALCULATED ONLY</span>
+                        {% elif report and report.overall_status == 'DISCREPANCY' %}
+                            <span class="badge badge-danger">✕ DISCREPANCY</span>
+                        {% elif report and report.overall_status == 'REVIEW_REQUIRED' %}
+                            <span class="badge badge-warning">⚠ REVIEW REQUIRED</span>
+                        {% elif report and report.overall_status == 'INSUFFICIENT_DATA' %}
+                            <span class="badge badge-danger">✕ INSUFFICIENT DATA</span>
+                        {% else %}
+                            <span class="badge badge-info">EXTRACTION COMPLETE</span>
+                        {% endif %}
+
+                    </div>
+                </div>
+            </div>
+
+            <h3 style="font-size: 0.875rem; margin-bottom: 0.5rem;">⚠️ Structured Validation Issues</h3>
+            {% if quote.extraction_metadata.warnings %}
+            <ul style="padding-left: 0; list-style: none; font-size: 0.8125rem; margin-bottom: 1.5rem;">
+                {% for w in quote.extraction_metadata.warnings %}
+                <li style="margin-bottom: 0.5rem; background: rgba(239, 68, 68, 0.08); border-left: 3px solid var(--danger); padding: 0.5rem 0.75rem; border-radius: 4px;">
+                    {{ w }}
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p style="font-size: 0.8125rem; color: var(--success); margin-bottom: 1.5rem;">✓ Zero validation anomalies detected. All arithmetic and evidence fully reconciled.</p>
+            {% endif %}
+
+            <h3 style="font-size: 0.875rem; margin-bottom: 0.5rem;">ℹ️ Parser & Confidence Calibration</h3>
+            <div style="font-size: 0.8125rem; background: rgba(15, 23, 42, 0.4); padding: 0.875rem; border-radius: 6px; border: 1px solid var(--border-color);">
+                <p><strong>Parser:</strong> {{ quote.extraction_metadata.parser_used }}</p>
+                <p><strong>Extracted At:</strong> {{ quote.extraction_metadata.extracted_at }}</p>
+                <p><strong>Overall Evidence Confidence:</strong> 
+                    <span class="badge {% if quote.extraction_metadata.overall_confidence >= 0.85 %}badge-success{% else %}badge-warning{% endif %}">
+                        {{ (quote.extraction_metadata.overall_confidence * 100)|round|int }}%
+                    </span>
+                </p>
+                <p><strong>Processing Mode:</strong> {{ quote.extraction_metadata.processing_mode }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Human Correction Modal -->
+<div id="correction-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 60; align-items: center; justify-content: center;">
+    <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.5rem; max-width: 500px; margin: 5% auto;">
+        <h3 style="margin-bottom: 0.5rem; font-size: 1rem; color: var(--accent);">✎ Correct Line Item Field</h3>
+        <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1rem;">
+            This will record a <code>FieldCorrection</code> override. Re-running extraction will preserve your corrected value!
+        </p>
+
+        <form action="/tests/{{ test.test_id }}/correct" method="POST" id="correction-form">
+            <input type="hidden" name="line_index" id="modal-line-index">
+            
+            <div style="margin-bottom: 0.75rem;">
+                <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Field to Correct</label>
+                <select name="field_name" id="modal-field-select" onchange="updateModalInputValue();">
+                    <option value="raw_description">Description (raw_description)</option>
+                    <option value="supplier_part_number">Supplier Part No. (supplier_part_number)</option>
+                    <option value="quoted_qty">Quoted Quantity (quoted_qty)</option>
+                    <option value="quoted_uom">UOM (quoted_uom)</option>
+                    <option value="unit_price">Unit Price (unit_price)</option>
+                    <option value="tax_rate_pct">Tax Rate % (tax_rate_pct)</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">New Value</label>
+                <input type="text" name="new_value" id="modal-field-value" required>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+                <button type="button" onclick="document.getElementById('correction-modal').style.display='none';" class="btn btn-secondary btn-sm">Cancel</button>
+                <button type="submit" class="btn btn-primary btn-sm">💾 Save Human Override</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+let currentModalItem = {};
+
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-pane').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('#tab-btn-items, #tab-btn-json, #tab-btn-terms, #tab-btn-warnings').forEach(el => el.classList.remove('active'));
+    
+    document.getElementById(tabId).style.display = 'block';
+    
+    if (tabId === 'items-tab') document.getElementById('tab-btn-items').classList.add('active');
+    if (tabId === 'json-tab') document.getElementById('tab-btn-json').classList.add('active');
+    if (tabId === 'terms-tab') document.getElementById('tab-btn-terms').classList.add('active');
+    if (tabId === 'warnings-tab') document.getElementById('tab-btn-warnings').classList.add('active');
+}
+
+function openCorrectionModal(lineIndex, desc, qty, uom, price, tax, partNo) {
+    currentModalItem = {
+        raw_description: desc,
+        quoted_qty: qty,
+        quoted_uom: uom,
+        unit_price: price,
+        tax_rate_pct: tax,
+        supplier_part_number: partNo
+    };
+    document.getElementById('modal-line-index').value = lineIndex;
+    updateModalInputValue();
+    document.getElementById('correction-modal').style.display = 'block';
+}
+
+function updateModalInputValue() {
+    const field = document.getElementById('modal-field-select').value;
+    document.getElementById('modal-field-value').value = currentModalItem[field] || '';
+}
+</script>
+{% endblock %}

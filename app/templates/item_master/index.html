@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block title %}Company Item Master Catalog — Quote Intelligence{% endblock %}
+
+{% block content %}
+<!-- Top Breadcrumb Bar -->
+<div class="breadcrumb-bar">
+    <div class="breadcrumbs">
+        <a href="/">Home</a>
+        <span class="breadcrumb-separator">/</span>
+        <span class="breadcrumb-current">Company Product Master &bull; Internal Catalog</span>
+    </div>
+    <div>
+        <a href="/" class="btn btn-secondary btn-sm">&larr; Back to Home</a>
+    </div>
+</div>
+
+<!-- Dominant Page Identity Header -->
+<div class="card" style="margin-bottom: 1.25rem; border-top: 3px solid var(--accent); background: var(--bg-card); padding: 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                <span class="badge badge-info">Company Product Master</span>
+                <span style="font-size: 0.75rem; color: var(--text-muted);">Internal Master Records</span>
+            </div>
+            <h1 style="font-size: 1.4rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.25rem;">
+                Company Item Master
+            </h1>
+            <p style="font-size: 0.8125rem; color: var(--text-muted); max-width: 800px;">
+                Search and browse your organization's standard products, approved SKUs, manufacturer part numbers, and stocking units.
+                These catalog products are referenced during RFQ creation and supplier quotation alignment.
+            </p>
+        </div>
+        <div style="text-align: right;">
+            <span class="badge badge-info" style="font-size: 0.875rem; padding: 0.35rem 0.75rem; font-weight: 700;">
+                {{ total_count }} Products in Catalog
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- Primary Interaction: Search & Filter Catalog Products -->
+<div class="card" style="padding: 1rem; margin-bottom: 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+        <div style="flex: 1; min-width: 280px;">
+            <input type="text" id="item-search" placeholder="Search SKU, description, manufacturer PN, brand..." onkeyup="filterItems();" style="width: 100%; margin: 0; font-size: 0.875rem;">
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Filter UOM:</span>
+            <button onclick="filterByUOM('')" class="btn btn-secondary btn-sm uom-filter active-filter" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">All</button>
+            {% for uom in uoms %}
+            <button onclick="filterByUOM('{{ uom }}')" class="btn btn-secondary btn-sm uom-filter" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">{{ uom }}</button>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Product Master Table -->
+<div class="card" style="margin-bottom: 2rem;">
+    <div class="card-header">
+        <div class="card-title">Catalog Products (<span id="visible-count">{{ total_count }}</span>)</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted);">Click any product to inspect specifications and supplier cross-references</div>
+    </div>
+    
+    <div style="overflow-x: auto;">
+        <table id="item-master-table">
+            <thead>
+                <tr>
+                    <th style="width: 130px;">Internal SKU</th>
+                    <th style="width: 140px;">Manufacturer PN</th>
+                    <th>Canonical Product Description</th>
+                    <th style="width: 100px;">Brand</th>
+                    <th style="width: 80px;">Stock UOM</th>
+                    <th>Approved Supplier Cross-References</th>
+                    <th style="width: 90px; text-align: right;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr class="item-row" data-uom="{{ item.stocking_uom }}" onclick="window.location.href='/item-master/{{ item.internal_item_id }}'" style="cursor: pointer;">
+                    <td>
+                        <code style="color: var(--success); font-weight: 700; font-size: 0.8125rem;">{{ item.internal_sku }}</code>
+                        <div style="font-size: 0.7rem; color: var(--text-muted);">{{ item.internal_item_id }}</div>
+                    </td>
+                    <td>
+                        {% if item.manufacturer_part_number %}
+                            <code style="color: var(--text-main); font-size: 0.8125rem;">{{ item.manufacturer_part_number }}</code>
+                        {% else %}
+                            <span style="color: var(--text-subtle);">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="font-weight: 600; color: var(--text-main); font-size: 0.875rem;">{{ item.canonical_description }}</div>
+                        {% if item.specifications %}
+                        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.2rem;">
+                            {% for k, v in item.specifications.items() %}
+                                <span>{{ k }}: <strong>{{ v }}</strong></span>{% if not loop.last %} &bull; {% endif %}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge badge-muted">{{ item.brand or 'Standard' }}</span>
+                    </td>
+                    <td>
+                        <span class="badge badge-info">{{ item.stocking_uom }}</span>
+                    </td>
+                    <td>
+                        {% if item.approved_supplier_part_numbers %}
+                            {% for sp in item.approved_supplier_part_numbers %}
+                                <code style="color: var(--accent); font-size: 0.75rem; margin-right: 0.25rem;">{{ sp }}</code>
+                            {% endfor %}
+                        {% else %}
+                            <span style="color: var(--text-subtle); font-size: 0.75rem;">None registered</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: right;">
+                        <span class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;">
+                            Inspect &rarr;
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Secondary Section: Advanced Catalog Administration -->
+<div class="card" style="border: 1px dashed var(--border-color); background: var(--bg-secondary); padding: 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <div style="font-size: 0.875rem; font-weight: 700; color: var(--text-main);">
+                Advanced Catalog Administration
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem;">
+                Manage the underlying permanent company catalog. To create an RFQ or select items for purchase, visit the RFQ module.
+            </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+            <a href="/item-master/import" class="btn btn-secondary btn-sm">
+                Import Catalog
+            </a>
+            <a href="/item-master/new" class="btn btn-secondary btn-sm">
+                + Add Product Manually
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+    let activeUOM = '';
+
+    function filterItems() {
+        const query = document.getElementById('item-search').value.toLowerCase().trim();
+        const rows = document.querySelectorAll('.item-row');
+        let visible = 0;
+
+        rows.forEach(row => {
+            const uom = row.dataset.uom;
+            const text = row.innerText.toLowerCase();
+            const matchesQuery = query === '' || text.includes(query);
+            const matchesUOM = activeUOM === '' || uom === activeUOM;
+
+            if (matchesQuery && matchesUOM) {
+                row.style.display = '';
+                visible++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        document.getElementById('visible-count').innerText = visible;
+    }
+
+    function filterByUOM(uom) {
+        activeUOM = uom;
+        document.querySelectorAll('.uom-filter').forEach(btn => {
+            if ((uom === '' && btn.innerText === 'All') || btn.innerText === uom) {
+                btn.classList.add('active-filter', 'btn-primary');
+                btn.classList.remove('btn-secondary');
+            } else {
+                btn.classList.remove('active-filter', 'btn-primary');
+                btn.classList.add('btn-secondary');
+            }
+        });
+        filterItems();
+    }
+</script>
+{% endblock %}

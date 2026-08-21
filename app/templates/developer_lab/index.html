@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Developer Lab &amp; Test Runs — Quote Intelligence{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+    <div>
+        <h1 style="font-size: 1.25rem; font-weight: 700; color: var(--purple);">🛠️ Developer Lab &amp; Raw Test Artifacts</h1>
+        <p style="font-size: 0.8125rem; color: var(--text-muted);">
+            Low-level test runner environment and raw JSON data artifact inspector. Segregated from the executive procurement workspace.
+        </p>
+    </div>
+    <div>
+        <a href="/quotes/upload" class="btn btn-secondary btn-sm">+ Create Custom Run</a>
+    </div>
+</div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Run ID</th>
+                <th>Run Label</th>
+                <th>Source File</th>
+                <th>Parser</th>
+                <th>Lines</th>
+                <th>Confidence</th>
+                <th>Status</th>
+                <th>JSON Artifacts</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for q in runs %}
+            <tr>
+                <td><code style="color: var(--purple); font-weight: 700;">{{ q.test_id }}</code></td>
+                <td style="font-weight: 600;">{{ q.test_name }}</td>
+                <td style="font-size: 0.75rem; color: var(--text-muted);">{{ q.source_file_name or '—' }}</td>
+                <td style="font-size: 0.75rem;">{{ q.parser_used or '—' }}</td>
+                <td>{{ q.line_count }}</td>
+                <td>
+                    {% if q.average_confidence %}
+                        {{ (q.average_confidence * 100)|round|int }}%
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td>
+                    {% if q.status == 'SUCCESS' %}
+                        <span class="badge badge-success">Extracted</span>
+                    {% elif q.status == 'FAILED' %}
+                        <span class="badge badge-danger">Failed</span>
+                    {% else %}
+                        <span class="badge badge-muted">{{ q.status }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="/quotes/{{ q.test_id }}/json" target="_blank" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.15rem 0.4rem;">
+                        { } Raw JSON
+                    </a>
+                </td>
+                <td>
+                    <a href="/quotes/{{ q.test_id }}" class="btn btn-secondary btn-sm">Inspect &rarr;</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

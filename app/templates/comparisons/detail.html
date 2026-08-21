@@ -1,0 +1,367 @@
+{% extends "base.html" %}
+
+{% block title %}Commercial Evaluation & Award — {{ comparison.rfq_id }}{% endblock %}
+
+{% block content %}
+<!-- Clean Clickable Breadcrumbs (No duplicate navigation buttons) -->
+<div class="breadcrumb-bar">
+    <div class="breadcrumbs">
+        <a href="/rfqs">RFQs</a>
+        <span class="breadcrumb-separator">/</span>
+        <a href="/rfqs/{{ comparison.rfq_id }}">{{ rfq.title if rfq else comparison.rfq_id }} ({{ comparison.rfq_id }})</a>
+        <span class="breadcrumb-separator">/</span>
+        <span class="breadcrumb-current">Step 4 — Comparison Analysis</span>
+    </div>
+    <div>
+        <a href="/comparisons/create?rfq_id={{ rfq.rfq_id or comparison.rfq_id }}" class="btn btn-secondary btn-sm">&larr; Back to Comparison Setup</a>
+    </div>
+</div>
+
+<!-- Compact 5-Step Progression Stepper -->
+<div class="card" style="padding: 0.85rem 1.25rem; margin-bottom: 1.25rem; background: var(--bg-card); border: 1px solid var(--border-color);">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+            <!-- Stage 1 -->
+            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; font-weight: 700; color: var(--text-main);">
+                <span class="badge badge-success" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">1</span>
+                <span>RFQ Scope</span>
+            </div>
+            <span style="color: var(--text-subtle);">&rarr;</span>
+
+            <!-- Stage 2 -->
+            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; font-weight: 700; color: var(--text-main);">
+                <span class="badge badge-success" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">2</span>
+                <span>Supplier Quotes ({{ comparison.suppliers|length }})</span>
+            </div>
+            <span style="color: var(--text-subtle);">&rarr;</span>
+
+            <!-- Stage 3 -->
+            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; font-weight: 700; color: var(--text-main);">
+                <span class="badge badge-success" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">3</span>
+                <span>Review &amp; Matching</span>
+            </div>
+            <span style="color: var(--text-subtle);">&rarr;</span>
+
+            <!-- Stage 4 -->
+            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; font-weight: 700; color: var(--text-main);">
+                <span class="badge badge-success" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">4</span>
+                <span>Comparison Normalized</span>
+            </div>
+            <span style="color: var(--text-subtle);">&rarr;</span>
+
+            <!-- Stage 5 -->
+            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; font-weight: 700; color: var(--success);">
+                <span class="badge badge-success" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">5</span>
+                <span>Award Decision Available</span>
+            </div>
+        </div>
+
+
+    </div>
+</div>
+
+<!-- A. RFQ Context Header -->
+<div class="card" style="border-top: 3px solid var(--accent); padding: 1.25rem; margin-bottom: 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <div style="font-size: 0.75rem; color: var(--accent); font-weight: 700; font-family: var(--font-mono); text-transform: uppercase; margin-bottom: 0.25rem;">
+                Commercial Evaluation &amp; Award
+            </div>
+            <h1 style="font-size: 1.35rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.35rem;">
+                {{ comparison.rfq_id }} &bull; {{ rfq.title if rfq else 'Procurement Evaluation' }}
+            </h1>
+            <div style="font-size: 0.8125rem; color: var(--text-muted);">
+                <strong>{{ comparison.item_comparisons|length }} requested items</strong> &bull; 
+                <strong>{{ comparison.suppliers|length }} supplier quotation(s)</strong> &bull; 
+                Base Currency: <strong>{{ comparison.base_currency }}</strong> &bull; 
+                Charge Allocation: <strong>{{ comparison.charge_allocation_method.replace('_', ' ').title() }}</strong>
+            </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <a href="/comparisons/create?rfq_id={{ comparison.rfq_id }}" class="btn btn-secondary btn-sm">Re-run Evaluation</a>
+            <a href="/rfqs/{{ comparison.rfq_id }}/award" class="btn btn-success btn-sm" style="font-weight: 700;">
+                Proceed to Award Decision &rarr;
+            </a>
+        </div>
+    </div>
+
+    <!-- Currency Conversion Ribbon -->
+    <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color); display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; font-size: 0.8125rem;">
+        <span style="font-weight: 600; color: var(--text-muted); text-transform: uppercase; font-size: 0.7rem;">Currency Conversion:</span>
+        {% if fx_metadata and fx_metadata|length > 0 %}
+            {% for cur, meta in fx_metadata.items() %}
+                {% if cur != comparison.base_currency %}
+                <div style="background: var(--bg-card-subtle); border: 1px solid var(--border-color); border-radius: 4px; padding: 0.35rem 0.65rem; display: inline-flex; align-items: center; gap: 0.5rem;">
+                    <strong style="color: var(--accent); font-family: var(--font-mono); font-size: 0.8125rem;">
+                        {{ cur }} &rarr; {{ comparison.base_currency }}: {% if comparison.base_currency == 'INR' %}₹{% elif comparison.base_currency == 'USD' %}${% elif comparison.base_currency == 'EUR' %}€{% endif %}{{ meta.rate }}
+                    </strong>
+                    <span style="color: var(--text-muted); font-size: 0.75rem;">Source: {{ meta.provider }}</span>
+                    {% if meta.is_live %}
+                        <span class="badge badge-success" style="font-size: 0.65rem;">Live Rate ({{ meta.timestamp }})</span>
+                    {% elif meta.is_cached %}
+                        <span class="badge badge-info" style="font-size: 0.65rem;">Cached ({{ meta.timestamp }})</span>
+                    {% else %}
+                        <span class="badge badge-warning" style="font-size: 0.65rem;">Offline Fallback ({{ meta.timestamp }})</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+            {% endfor %}
+        {% else %}
+            <div style="color: var(--text-muted); font-size: 0.75rem;">
+                <span class="badge badge-success" style="font-size: 0.65rem; margin-right: 0.35rem;">Base Currency</span>
+                All participating supplier quotes submitted in <strong>{{ comparison.base_currency }}</strong> &mdash; No foreign exchange conversion required.
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- B. Overall Evaluation & Sourcing Decisions -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem;">
+    
+    <!-- 1. Whole-RFQ Award Card -->
+    {% if ranking_report.l1_supplier and ranking_report.l1_supplier.is_eligible and ranking_report.l1_supplier.total_landed_cost_base %}
+    <div class="card" style="border: 2px solid var(--success); background: var(--bg-card); border-left: 4px solid var(--success); margin-bottom: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+            <div>
+                <span class="badge badge-success" style="font-size: 0.7rem; margin-bottom: 0.25rem;">STRATEGIC SOURCING AWARD RECOMMENDATION &bull; Scenario A &bull; Single Supplier L1</span>
+                <h2 style="font-size: 1.15rem; font-weight: 800; color: var(--text-main);">
+                    {{ ranking_report.l1_supplier.supplier_name }}
+                </h2>
+            </div>
+            <div style="text-align: right;">
+                <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Total Landed Cost</div>
+                <div style="font-size: 1.25rem; font-weight: 800; color: var(--success); font-family: var(--font-mono);">
+                    {{ comparison.base_currency }} {{ ranking_report.l1_supplier.total_landed_cost_base }}
+                </div>
+            </div>
+        </div>
+        <p style="font-size: 0.8125rem; color: var(--text-muted); line-height: 1.4;">
+            Covers 100% of the requested RFQ scope ({{ comparison.item_comparisons|length }} items) with the lowest evaluated landed cost across all complete offers.
+        </p>
+        {% if ranking_report.l2_supplier and ranking_report.l2_supplier.price_delta_to_l1 %}
+        <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.1); font-size: 0.75rem; color: var(--text-muted);">
+            L2: {{ ranking_report.l2_supplier.supplier_name }} ({{ comparison.base_currency }} {{ ranking_report.l2_supplier.total_landed_cost_base }}) &bull;
+            Savings vs L2: <strong style="color: var(--success);">{{ comparison.base_currency }} {{ ranking_report.l2_supplier.price_delta_to_l1 }} ({{ ranking_report.l2_supplier.price_delta_pct_to_l1 }}%)</strong>
+        </div>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="card" style="border: 1px solid var(--border-color); background: var(--bg-card); margin-bottom: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+            <div>
+                <span class="badge badge-muted" style="font-size: 0.7rem; margin-bottom: 0.25rem;">Whole-RFQ Sourcing</span>
+                <h2 style="font-size: 1.1rem; font-weight: 700; color: var(--text-main);">
+                    No Complete-Scope Supplier
+                </h2>
+            </div>
+            <div style="text-align: right;">
+                <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Total Landed Cost</div>
+                <div style="font-size: 0.9375rem; font-weight: 600; color: var(--text-muted);">
+                    Not Available
+                </div>
+            </div>
+        </div>
+        <p style="font-size: 0.8125rem; color: var(--text-muted); line-height: 1.4;">
+            No participating supplier quoted 100% of the {{ comparison.item_comparisons|length }} requested items. A whole-RFQ single-vendor award is not currently possible.
+        </p>
+        <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border-color); font-size: 0.75rem; color: var(--accent);">
+            Review line-item split sourcing below to evaluate lowest offer per quoted item.
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 2. Line-Item / Split Sourcing Card -->
+    {% if ranking_report.total_split_sourcing_cost_base %}
+    <div class="card" style="border: 2px solid var(--accent); background: linear-gradient(135deg, rgba(56, 189, 248, 0.08) 0%, rgba(20, 31, 56, 0.95) 100%); margin-bottom: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+            <div>
+                <span class="badge badge-info" style="font-size: 0.7rem; margin-bottom: 0.25rem;">Line-Item Split Sourcing</span>
+                <h2 style="font-size: 1.15rem; font-weight: 800; color: var(--text-main);">
+                    Item-Level Optimal Strategy
+                </h2>
+            </div>
+            <div style="text-align: right;">
+                <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Combined Landed Cost</div>
+                <div style="font-size: 1.25rem; font-weight: 800; color: var(--accent); font-family: var(--font-mono);">
+                    {{ comparison.base_currency }} {{ ranking_report.total_split_sourcing_cost_base }}
+                </div>
+            </div>
+        </div>
+        <p style="font-size: 0.8125rem; color: var(--text-muted); line-height: 1.4;">
+            Lowest evaluated supplier selected independently for each quoted RFQ item across {{ ranking_report.item_split_recommendations|length }} items.
+        </p>
+        {% if ranking_report.total_split_savings_vs_l1 and ranking_report.total_split_savings_vs_l1|string != '0.00' and ranking_report.total_split_savings_vs_l1|string != '0' and ranking_report.total_split_savings_vs_l1|string != '0.0' %}
+        <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.1); font-size: 0.75rem; color: var(--text-muted);">
+            Incremental Savings vs Single Vendor: <strong style="color: var(--accent);">{{ comparison.base_currency }} {{ ranking_report.total_split_savings_vs_l1 }}</strong>
+        </div>
+        {% else %}
+        <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.1); font-size: 0.75rem; color: var(--text-muted);">
+            Enables item-by-item procurement from partial and complete quotations.
+        </div>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="card" style="border: 1px solid var(--border-color); background: var(--bg-card); margin-bottom: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+            <div>
+                <span class="badge badge-muted" style="font-size: 0.7rem; margin-bottom: 0.25rem;">Line-Item Sourcing</span>
+                <h2 style="font-size: 1.1rem; font-weight: 700; color: var(--text-main);">
+                    Line-Item Sourcing Available
+                </h2>
+            </div>
+            <div style="text-align: right;">
+                <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Combined Cost</div>
+                <div style="font-size: 0.9375rem; font-weight: 600; color: var(--text-muted);">
+                    Evaluated per Item
+                </div>
+            </div>
+        </div>
+        <p style="font-size: 0.8125rem; color: var(--text-muted); line-height: 1.4;">
+            Lowest evaluated supplier can be selected independently for each quoted RFQ item in the detailed comparison matrix below.
+        </p>
+        <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border-color); font-size: 0.75rem; color: var(--text-muted);">
+            Inspect item-level landed prices below to determine split purchase orders.
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- C. Supplier Scope Coverage Audit -->
+<div class="card" style="margin-bottom: 1.25rem;">
+    <div class="card-header" style="margin-bottom: 0.75rem;">
+        <div>
+            <div class="card-title" style="font-size: 0.9375rem;">Participating Suppliers &amp; Coverage Audit &bull; Verified Supplier Rankings</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">
+                Audit of items quoted by each participating supplier. Partial coverage quotations participate in line-item comparison.
+            </div>
+        </div>
+    </div>
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Supplier</th>
+                    <th style="width: 140px; text-align: center;">Items Quoted</th>
+                    <th style="width: 120px; text-align: center;">Coverage</th>
+                    <th style="width: 180px; text-align: center;">Coverage Status</th>
+                    <th style="width: 240px;">Sourcing Eligibility</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for supp_id, supp in comparison.suppliers.items() %}
+                <tr>
+                    <td>
+                        <strong style="color: var(--text-main);">{{ supp.supplier_name }}</strong>
+                        <div style="font-size: 0.7rem; color: var(--accent); font-family: var(--font-mono);">{{ supp.supplier_id }}</div>
+                    </td>
+                    <td style="text-align: center; font-family: var(--font-mono); font-weight: 600;">
+                        {{ supp.comparable_items_count }} / {{ comparison.item_comparisons|length }}
+                    </td>
+                    <td style="text-align: center; font-family: var(--font-mono); font-weight: 700;">
+                        {% set pct = (supp.comparable_items_count / comparison.item_comparisons|length * 100)|round|int if comparison.item_comparisons|length > 0 else 0 %}
+                        {{ pct }}%
+                    </td>
+                    <td style="text-align: center;">
+                        {% set pct = (supp.comparable_items_count / comparison.item_comparisons|length * 100)|round|int if comparison.item_comparisons|length > 0 else 0 %}
+                        {% if pct == 100 %}
+                            <span class="badge badge-success">Complete (100%)</span>
+                        {% else %}
+                            <span class="badge badge-info">Partial (Item-Level Only)</span>
+                        {% endif %}
+                    </td>
+                    <td style="font-size: 0.75rem; color: var(--text-muted);">
+                        {% set pct = (supp.comparable_items_count / comparison.item_comparisons|length * 100)|round|int if comparison.item_comparisons|length > 0 else 0 %}
+                        {% if pct == 100 %}
+                            Eligible for whole-RFQ &amp; line-item awards
+                        {% else %}
+                            Eligible for line-item split awards ({{ supp.comparable_items_count }} quoted items)
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- D. Terminology Reference Note -->
+<div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.65rem 1rem; margin-bottom: 1.25rem; font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+    <div>
+        <strong style="color: var(--text-main);">Procurement Ranking Note:</strong>
+        <strong>L1</strong> = Lowest evaluated supplier offer &bull; 
+        <strong>Whole-RFQ ranking</strong> applies only to suppliers quoting 100% scope &bull; 
+        <strong>Line-item lowest</strong> identifies the best offer per individual line.
+    </div>
+</div>
+
+<!-- E. Detailed Item-by-Item Comparison Matrix -->
+<div class="card" style="margin-bottom: 1.25rem;">
+    <div class="card-header">
+        <div>
+            <div class="card-title" style="font-size: 1rem;">Normalized Comparison Matrix</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">
+                Evaluated unit landed prices and line totals in {{ comparison.base_currency }}, normalized for quantity tiers, UOM conversions, and allocated commercial charges.
+            </div>
+        </div>
+    </div>
+
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 80px;">Line #</th>
+                    <th style="width: 130px;">Item / SKU</th>
+                    <th style="min-width: 200px;">Description &amp; Specifications</th>
+                    <th style="width: 110px; text-align: right;">Target Qty</th>
+                    {% for supp_id, supp in comparison.suppliers.items() %}
+                    <th style="min-width: 170px; text-align: right; border-left: 1px solid var(--border-color);">
+                        {{ supp.supplier_name }}
+                        <div style="font-size: 0.65rem; color: var(--text-subtle); text-transform: none; font-weight: normal;">
+                            Quoted in {{ supp.source_currency }}
+                        </div>
+                    </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for line_id, item_comp in comparison.item_comparisons.items() %}
+                {% set split_rec = ranking_report.item_split_recommendations.get(line_id) %}
+                <tr>
+                    <td><code style="color: var(--accent); font-weight: 700;">{{ line_id }}</code></td>
+                    <td>
+                        <strong style="color: var(--text-main); font-size: 0.8125rem;">{{ item_comp.item_description.split(' — ')[0] if ' — ' in item_comp.item_description else line_id }}</strong>
+                    </td>
+                    <td>
+                        <div style="color: var(--text-main); font-size: 0.8125rem;">{{ item_comp.item_description }}</div>
+                    </td>
+                    <td style="text-align: right; font-family: var(--font-mono); font-weight: 600;">
+                        {{ item_comp.requested_quantity }} {{ item_comp.requested_uom }}
+                    </td>
+
+                    {% for supp_id, supp in comparison.suppliers.items() %}
+                    {% set price = item_comp.supplier_prices.get(supp_id) %}
+                    <td style="text-align: right; border-left: 1px solid var(--border-color); vertical-align: top;">
+                        {% if price and price.is_comparable and price.unit_landed_price_base %}
+                            <div style="font-weight: 700; font-family: var(--font-mono); font-size: 0.875rem; color: {% if split_rec and split_rec.l1_supplier_id == supp_id %}var(--success){% else %}var(--text-main){% endif %};">
+                                {{ comparison.base_currency }} {{ price.unit_landed_price_base }} <span style="font-size: 0.7rem; font-weight: normal; color: var(--text-muted);">/ {{ item_comp.requested_uom }}</span>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono);">
+                                Total: {{ comparison.base_currency }} {{ price.line_total_landed_base }}
+                            </div>
+                            {% if split_rec and split_rec.l1_supplier_id == supp_id %}
+                                <span class="badge badge-success" style="font-size: 0.65rem; margin-top: 0.25rem;">Line-Item Lowest (L1)</span>
+                            {% endif %}
+                        {% elif price and not price.is_comparable %}
+                            <span class="badge badge-warning" style="font-size: 0.65rem;">Review Needed</span>
+                        {% else %}
+                            <span style="color: var(--text-subtle); font-size: 0.75rem; font-style: italic;">Not Quoted</span>
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

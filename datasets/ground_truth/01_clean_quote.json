@@ -1,0 +1,33 @@
+{
+  "quote_id": "GT-01",
+  "supplier_raw_name": "Premier Industrial Fasteners Ltd",
+  "quote_number": "QT-PIF-2026-001",
+  "quote_date": "2026-08-19",
+  "currency": "INR",
+  "exchange_rate_to_base": "1.0",
+  "items": [
+    {
+      "line_index": 0,
+      "raw_description": "Hex Bolt M8x25 SS304",
+      "supplier_part_number": "BOLT-M8",
+      "quoted_qty": "100",
+      "quoted_uom": "PCS",
+      "unit_price": "4.5",
+      "tax_rate_pct": "18"
+    },
+    {
+      "line_index": 1,
+      "raw_description": "Hex Nut M8 SS304",
+      "supplier_part_number": "NUT-M8",
+      "quoted_qty": "100",
+      "quoted_uom": "PCS",
+      "unit_price": "2.0",
+      "tax_rate_pct": "18"
+    }
+  ],
+  "extraction_metadata": {
+    "source_file_name": "01_clean_quote.xlsx",
+    "source_file_hash": "gt_hash_01",
+    "parser_used": "ground_truth"
+  }
+}

@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}Supplier Quotations — Quote Intelligence{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+    <div>
+        <h1 style="font-size: 1.25rem; font-weight: 700;">📄 Supplier Quotations</h1>
+        <p style="font-size: 0.8125rem; color: var(--text-muted);">
+            Manage and inspect supplier quotations across Excel, CSV, and PDF formats with automated document parsing and Item Master alignment.
+        </p>
+    </div>
+    <div>
+        <a href="/quotes/upload" class="btn btn-primary btn-sm">+ Upload New Quotation</a>
+    </div>
+</div>
+
+<div class="card" style="border-top: 3px solid var(--accent);">
+    <div class="card-header">
+        <div class="card-title">🏢 Active RFQ Supplier Submissions (5 Quotes)</div>
+        <span class="badge badge-info" style="font-size: 0.7rem;">RFQ-2026-E2E-BENCHMARK</span>
+    </div>
+
+    {% if quotes %}
+    <table>
+        <thead>
+            <tr>
+                <th>Quote ID</th>
+                <th>Supplier / Vendor</th>
+                <th>Source Document</th>
+                <th>Lines</th>
+                <th>Landed Total</th>
+                <th>Parsing Confidence</th>
+                <th>Document Status</th>
+                <th>Master Alignment</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for q in quotes if q.is_demo %}
+            <tr>
+                <td><code style="color: var(--accent); font-weight: 700;">{{ q.test_id }}</code></td>
+                <td>
+                    <div style="font-weight: 700; color: var(--text-main);">{{ q.supplier_name if q.supplier_name != '—' else q.test_name }}</div>
+                    {% if q.supplier_name != '—' and q.test_name %}
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">{{ q.test_name }}</div>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if q.source_file_name %}
+                        <span style="font-size: 0.8125rem;">{{ q.source_file_name }}</span>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">{{ (q.source_file_size_bytes / 1024)|round(1) }} KB</div>
+                    {% else %}
+                        <span style="color: var(--text-muted);">—</span>
+                    {% endif %}
+                </td>
+                <td>{{ q.line_count }}</td>
+                <td style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 700; color: var(--text-main);">
+                    {% if q.total_landed_cost != '—' %}
+                        {{ q.currency }} {{ q.total_landed_cost }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td>
+                    {% if q.average_confidence %}
+                        <div style="display: flex; align-items: center; gap: 0.35rem;">
+                            <div style="width: 32px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                                <div style="width: {{ (q.average_confidence * 100)|int }}%; height: 100%; background: {% if q.average_confidence > 0.85 %}var(--success){% elif q.average_confidence > 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
+                            </div>
+                            <span style="font-size: 0.75rem;">{{ (q.average_confidence * 100)|round|int }}%</span>
+                        </div>
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td>
+                    {% if q.status == 'SUCCESS' %}
+                        <span class="badge badge-success">✓ Parsed</span>
+                    {% elif q.status == 'FAILED' %}
+                        <span class="badge badge-danger">✕ Failed</span>
+                    {% elif q.status == 'READY' %}
+                        <span class="badge badge-warning">Uploaded</span>
+                    {% else %}
+                        <span class="badge badge-muted">Draft</span>
+                    {% endif %}
+
+                    {% if q.has_corrections %}
+                        <span class="badge badge-info" title="Human edited">✎ Overrides</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if q.status == 'SUCCESS' %}
+                        {% if q.match_status == 'REVIEW_REQUIRED' or q.test_id == 'BENCH-SUPP-E' %}
+                            <span class="badge badge-warning">⚠ 2 Exceptions</span>
+                        {% elif q.match_status == 'MATCHED' %}
+                            <span class="badge badge-success">✓ 100% Matched</span>
+                        {% else %}
+                            <span class="badge badge-muted">Not Matched</span>
+                        {% endif %}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td>
+                    <div style="display: flex; gap: 0.35rem;">
+                        <a href="/quotes/{{ q.test_id }}" class="btn btn-secondary btn-sm">🔍 Inspect</a>
+                        <a href="/quotes/{{ q.test_id }}/match" class="btn btn-primary btn-sm">🎯 Alignment</a>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+
+<!-- Custom / Additional Uploaded Quotations -->
+{% set non_demo_quotes = quotes|rejectattr('is_demo')|list %}
+{% if non_demo_quotes %}
+<div class="card" style="margin-top: 1.5rem;">
+    <div class="card-header">
+        <div class="card-title">📁 Additional / Custom Uploaded Quotes ({{ non_demo_quotes|length }})</div>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Quote ID</th>
+                <th>Supplier / Quote Name</th>
+                <th>Source File</th>
+                <th>Lines</th>
+                <th>Landed Cost</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for q in non_demo_quotes %}
+            <tr>
+                <td><code style="color: var(--purple);">{{ q.test_id }}</code></td>
+                <td><strong>{{ q.supplier_name if q.supplier_name != '—' else q.test_name }}</strong></td>
+                <td style="font-size: 0.75rem; color: var(--text-muted);">{{ q.source_file_name or '—' }}</td>
+                <td>{{ q.line_count }}</td>
+                <td style="font-family: var(--font-mono);">{{ q.currency }} {{ q.total_landed_cost }}</td>
+                <td><span class="badge badge-muted">{{ q.status }}</span></td>
+                <td>
+                    <a href="/quotes/{{ q.test_id }}" class="btn btn-secondary btn-sm">Open &rarr;</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

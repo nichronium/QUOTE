@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Controlled Benchmark Demo — Quote Intelligence{% endblock %}
+
+{% block content %}
+<div class="card" style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(20, 31, 56, 0.95) 100%); border-top: 3px solid var(--purple); padding: 1.5rem; margin-bottom: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.35rem;">
+                <span class="badge badge-purple" style="font-size: 0.75rem;">CONTROLLED BENCHMARK SHOWCASE</span>
+                <code style="color: var(--accent); font-weight: 700;">RFQ-2026-E2E-BENCHMARK</code>
+            </div>
+            <h1 style="font-size: 1.35rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.35rem;">
+                Industrial Plant Operations Annual Procurement RFQ (20 Products)
+            </h1>
+            <p style="font-size: 0.875rem; color: var(--text-muted);">
+                Controlled evaluation dataset testing multi-sheet extraction, UOM conversions, compound GST, currency conversion, and split-sourcing optimization across 5 diverse supplier quotations.
+            </p>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem;">
+            <a href="/comparisons/COMP-BENCHMARK" class="btn btn-success btn-sm">🏆 View Benchmark Award Evaluation &rarr;</a>
+        </div>
+    </div>
+</div>
+
+<!-- Participating Benchmark Supplier Quotations -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">📄 5 Controlled Supplier Submissions</div>
+        <span class="badge badge-info">100% Deterministic Ground Truth</span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem;">
+        {% for q in quotes %}
+        <div class="card" style="margin-bottom: 0; background: var(--bg-secondary); border: 1px solid var(--border-color); display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+                    <div>
+                        <div style="font-weight: 700; font-size: 0.9375rem; color: var(--text-main);">{{ q.supplier_name }}</div>
+                        <code style="font-size: 0.75rem; color: var(--accent);">{{ q.test_id }}</code>
+                    </div>
+                    {% if q.test_id == 'BENCH-SUPP-E' %}
+                        <span class="badge badge-warning">2 Ambiguous Lines</span>
+                    {% else %}
+                        <span class="badge badge-success">✓ 100% Matched</span>
+                    {% endif %}
+                </div>
+
+                <div style="font-size: 0.8125rem; margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                        <span style="color: var(--text-muted);">Quoted Currency:</span>
+                        <strong>{{ q.currency }}</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                        <span style="color: var(--text-muted);">Extracted Total:</span>
+                        <strong style="font-family: var(--font-mono); color: var(--accent);">
+                            {{ q.currency }} {{ q.total_landed_cost }}
+                        </strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                        <span style="color: var(--text-muted);">Commercial Terms:</span>
+                        <span style="font-size: 0.75rem;">{{ q.terms }}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="color: var(--text-muted);">Lines Extracted:</span>
+                        <span>{{ q.line_count }} of 20</span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color); display: flex; gap: 0.5rem;">
+                <a href="/quotes/{{ q.test_id }}" class="btn btn-secondary btn-sm" style="flex: 1; justify-content: center;">
+                    🔍 Inspect Parsing
+                </a>
+                <a href="/quotes/{{ q.test_id }}/match" class="btn btn-primary btn-sm" style="flex: 1; justify-content: center;">
+                    🎯 Master Alignment
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

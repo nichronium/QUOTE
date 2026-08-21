@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — Quote Intelligence{% endblock %}
+
+{% block content %}
+<!-- KPI Stats Grid -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+    <div class="card" style="margin-bottom: 0; border-top: 3px solid var(--accent);">
+        <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Quotes Processed</div>
+        <div style="font-size: 1.75rem; font-weight: 700; color: var(--text-main); margin-top: 0.25rem;">{{ stats.quotes_count }}</div>
+        <div style="font-size: 0.75rem; color: var(--accent); margin-top: 0.25rem;">Stored supplier quotations</div>
+    </div>
+
+    <div class="card" style="margin-bottom: 0; border-top: 3px solid var(--warning);">
+        <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Quotes Requiring Review</div>
+        <div style="font-size: 1.75rem; font-weight: 700; color: var(--warning); margin-top: 0.25rem;">{{ stats.review_quotes_count }}</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Ambiguous or unverified</div>
+    </div>
+
+    <div class="card" style="margin-bottom: 0; border-top: 3px solid var(--info);">
+        <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Unmatched Items</div>
+        <div style="font-size: 1.75rem; font-weight: 700; color: var(--info); margin-top: 0.25rem;">{{ stats.unmatched_items_count }}</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Pending Item Master link</div>
+    </div>
+
+    <div class="card" style="margin-bottom: 0; border-top: 3px solid var(--success);">
+        <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Active RFQs</div>
+        <div style="font-size: 1.75rem; font-weight: 700; color: var(--success); margin-top: 0.25rem;">{{ stats.rfqs_count }}</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Procurement requests</div>
+    </div>
+
+    <div class="card" style="margin-bottom: 0; border-top: 3px solid #e879f9;">
+        <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Comparisons Evaluated</div>
+        <div style="font-size: 1.75rem; font-weight: 700; color: #e879f9; margin-top: 0.25rem;">{{ stats.comparisons_count }}</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Multi-supplier matrices</div>
+    </div>
+</div>
+
+<!-- Primary Action Bar -->
+<div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; background: var(--bg-secondary); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); align-items: center; justify-content: space-between;">
+    <div style="font-weight: 600; font-size: 0.9375rem; display: flex; align-items: center; gap: 0.5rem;">
+        <span>🎯 Quick Actions:</span>
+        <span style="font-size: 0.8125rem; font-weight: normal; color: var(--text-muted);">Start an extraction, manage items, or run commercial comparison</span>
+    </div>
+    <div style="display: flex; gap: 0.75rem;">
+        <a href="/quotes/upload" class="btn btn-primary btn-sm">📄 Upload Quote</a>
+        <a href="/rfqs/create" class="btn btn-secondary btn-sm">📋 Create RFQ</a>
+        <a href="/comparisons/create" class="btn btn-secondary btn-sm">⚖️ Compare Quotes</a>
+    </div>
+</div>
+
+<!-- 2-Column Split: Recent Quotes & Recent RFQs / Comparisons -->
+<div style="display: grid; grid-template-columns: 3fr 2fr; gap: 1.5rem; align-items: start;">
+    
+    <!-- Left Column: Recent Quotes -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">📄 Recent Supplier Quotations</div>
+            <a href="/quotes" style="font-size: 0.8125rem; color: var(--accent); text-decoration: none;">View All &rarr;</a>
+        </div>
+
+        {% if stats.recent_quotes %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Quote ID</th>
+                    <th>Supplier / Name</th>
+                    <th>Status</th>
+                    <th>Items</th>
+                    <th>Landed Total</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for q in stats.recent_quotes %}
+                <tr>
+                    <td><code style="color: var(--accent); font-weight: 600;">{{ q.test_id }}</code></td>
+                    <td>
+                        <div style="font-weight: 600;">{{ q.supplier_name if q.supplier_name != '—' else q.test_name }}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">{{ q.source_file_name or "No file" }}</div>
+                    </td>
+                    <td>
+                        {% if q.status == 'SUCCESS' %}
+                            {% if q.match_status == 'REVIEW_REQUIRED' %}
+                                <span class="badge badge-warning">Review Match</span>
+                            {% elif q.match_status == 'MATCHED' %}
+                                <span class="badge badge-success">Ready</span>
+                            {% else %}
+                                <span class="badge badge-info">Extracted</span>
+                            {% endif %}
+                        {% elif q.status == 'FAILED' %}
+                            <span class="badge badge-danger">Failed</span>
+                        {% elif q.status == 'READY' %}
+                            <span class="badge badge-warning">Uploaded</span>
+                        {% else %}
+                            <span class="badge badge-muted">Draft</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ q.line_count }}</td>
+                    <td style="font-family: var(--font-mono); font-size: 0.8125rem;">
+                        {% if q.total_landed_cost != '—' %}
+                            {{ q.currency }} {{ q.total_landed_cost }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="/quotes/{{ q.test_id }}" class="btn btn-secondary btn-sm">Open</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="text-align: center; padding: 2.5rem 1rem; color: var(--text-muted);">
+            <p>No supplier quotations uploaded yet.</p>
+            <a href="/quotes/upload" class="btn btn-primary btn-sm" style="margin-top: 0.75rem;">+ Upload First Quote</a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Right Column: RFQs & Recent Comparisons -->
+    <div>
+        <!-- RFQs -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">📋 Active RFQs</div>
+                <a href="/rfqs" style="font-size: 0.8125rem; color: var(--accent); text-decoration: none;">Manage &rarr;</a>
+            </div>
+
+            {% if stats.recent_rfqs %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>RFQ ID</th>
+                        <th>Title</th>
+                        <th>Items</th>
+                        <th>Currency</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rfq in stats.recent_rfqs %}
+                    <tr>
+                        <td><code style="color: var(--success); font-weight: 600;">{{ rfq.rfq_id }}</code></td>
+                        <td style="font-weight: 600;">{{ rfq.title }}</td>
+                        <td>{{ rfq.line_item_count }}</td>
+                        <td>{{ rfq.base_currency }}</td>
+                        <td>
+                            <a href="/rfqs/{{ rfq.rfq_id }}" class="btn btn-secondary btn-sm">View</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div style="text-align: center; padding: 1.5rem; color: var(--text-muted);">
+                <p>No RFQs created.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Recent Comparisons -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">⚖️ Recent Comparisons</div>
+                <a href="/comparisons" style="font-size: 0.8125rem; color: var(--accent); text-decoration: none;">All &rarr;</a>
+            </div>
+
+            {% if stats.recent_comparisons %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Comparison</th>
+                        <th>RFQ</th>
+                        <th>L1 Supplier</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in stats.recent_comparisons %}
+                    <tr>
+                        <td><code style="color: #e879f9; font-weight: 600;">{{ c.comparison_id[:16] }}...</code></td>
+                        <td>{{ c.rfq_id }}</td>
+                        <td style="font-weight: 600; color: var(--success);">{{ c.l1_supplier }}</td>
+                        <td>
+                            <a href="/comparisons/{{ c.comparison_id }}" class="btn btn-secondary btn-sm">View Matrix</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div style="text-align: center; padding: 1.5rem; color: var(--text-muted);">
+                <p>No comparisons evaluated yet.</p>
+                <a href="/comparisons/create" class="btn btn-secondary btn-sm" style="margin-top: 0.5rem;">+ Create Comparison</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}\n
