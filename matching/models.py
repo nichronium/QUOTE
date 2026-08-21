@@ -41,6 +41,11 @@ class RFQLineItem(BaseModel):
     approved_uom_conversions: Dict[str, Decimal] = Field(default_factory=dict)
 
 
+class ItemStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+
+
 class ItemMasterRecord(BaseModel):
     internal_item_id: str
     internal_sku: str
@@ -51,6 +56,34 @@ class ItemMasterRecord(BaseModel):
     approved_conversion_factors: Dict[str, Decimal] = Field(default_factory=dict)
     brand: Optional[str] = None
     specifications: Dict[str, str] = Field(default_factory=dict)
+    status: str = "ACTIVE"  # "ACTIVE" | "INACTIVE"
+    import_batch_id: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class SupplierNameChange(BaseModel):
+    old_name: str
+    new_name: str
+    changed_at: str
+    changed_by: str = "SYSTEM"
+
+
+class SupplierMasterRecord(BaseModel):
+    supplier_id: str
+    supplier_name: str
+    status: str = "ACTIVE"  # "ACTIVE" | "INACTIVE"
+    name_history: List[SupplierNameChange] = Field(default_factory=list)
+    created_at: str
+
+
+class ImportBatchRecord(BaseModel):
+    import_batch_id: str
+    filename: str
+    imported_at: str
+    item_ids: List[str] = Field(default_factory=list)
+    items_count: int = 0
+    status: str = "COMPLETED"  # "COMPLETED" | "UNDONE"
+    source_type: str = "RFQ_REQUIREMENTS"  # "RFQ_REQUIREMENTS" | "CATALOG_IMPORT"
 
 
 class MatchCandidate(BaseModel):

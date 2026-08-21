@@ -10,7 +10,10 @@
         <span class="breadcrumb-separator">/</span>
         <span class="breadcrumb-current">Company Product Master &bull; Internal Catalog</span>
     </div>
-    <div>
+    <div style="display: flex; gap: 0.5rem;">
+        <button onclick="toggleImportHistory()" class="btn btn-secondary btn-sm">
+            📁 Import History ({{ batches|length }})
+        </button>
         <a href="/" class="btn btn-secondary btn-sm">&larr; Back to Home</a>
     </div>
 </div>
@@ -21,36 +24,162 @@
         <div>
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
                 <span class="badge badge-info">Company Product Master</span>
-                <span style="font-size: 0.75rem; color: var(--text-muted);">Internal Master Records</span>
+                <span style="font-size: 0.75rem; color: var(--text-muted);">Enterprise Master Data Management</span>
             </div>
             <h1 style="font-size: 1.4rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.25rem;">
                 Company Item Master
             </h1>
             <p style="font-size: 0.8125rem; color: var(--text-muted); max-width: 800px;">
-                Search and browse your organization's standard products, approved SKUs, manufacturer part numbers, and stocking units.
-                These catalog products are referenced during RFQ creation and supplier quotation alignment.
+                Manage standard organizational products, approved SKUs, and stocking units.
+                Deactivated items remain safely preserved for historical RFQ comparisons and awards.
             </p>
         </div>
-        <div style="text-align: right;">
-            <span class="badge badge-info" style="font-size: 0.875rem; padding: 0.35rem 0.75rem; font-weight: 700;">
-                {{ total_count }} Products in Catalog
-            </span>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <div style="background: var(--bg-card-subtle); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem 0.85rem; text-align: center;">
+                <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Products in Catalog</div>
+                <div style="font-weight: 800; font-size: 1.1rem; color: var(--text-main);">{{ total_count }}</div>
+            </div>
+            <div style="background: var(--bg-card-subtle); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem 0.85rem; text-align: center;">
+                <div style="font-size: 0.7rem; color: var(--success); text-transform: uppercase;">Active</div>
+                <div style="font-weight: 800; font-size: 1.1rem; color: var(--success);">{{ active_count }}</div>
+            </div>
+            <div style="background: var(--bg-card-subtle); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem 0.85rem; text-align: center;">
+                <div style="font-size: 0.7rem; color: #f59e0b; text-transform: uppercase;">Inactive</div>
+                <div style="font-weight: 800; font-size: 1.1rem; color: #f59e0b;">{{ inactive_count }}</div>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Primary Interaction: Search & Filter Catalog Products -->
+<!-- Import History Section (Collapsible) -->
+<div id="import-history-card" class="card" style="display: none; margin-bottom: 1.25rem; border: 1px solid var(--accent); background: var(--bg-card-subtle); padding: 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <div>
+            <h3 style="font-size: 1.05rem; font-weight: 700; color: var(--text-main); margin: 0;">
+                Item Master Import History &amp; Undo Rollback
+            </h3>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0.15rem 0 0 0;">
+                Review automated and manual catalog imports. Use "Undo Import" to clean up accidental spreadsheets.
+            </p>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="toggleImportHistory()">✕ Close</button>
+    </div>
+
+    {% if batches %}
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 140px;">Import Batch ID</th>
+                    <th>Source Document / Context</th>
+                    <th style="width: 130px;">Imported At</th>
+                    <th style="width: 90px; text-align: center;">Created</th>
+                    <th style="width: 90px; text-align: center;">Active</th>
+                    <th style="width: 90px; text-align: center;">Inactive</th>
+                    <th style="width: 100px; text-align: center;">Status</th>
+                    <th style="width: 160px; text-align: right;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for b in batches %}
+                <tr>
+                    <td><code style="color: var(--accent); font-weight: 700;">{{ b.import_batch_id }}</code></td>
+                    <td>
+                        <strong style="color: var(--text-main);">{{ b.filename }}</strong>
+                        <div style="font-size: 0.7rem; color: var(--text-muted);">Type: {{ b.source_type }}</div>
+                    </td>
+                    <td style="font-size: 0.75rem; color: var(--text-muted);">{{ b.imported_at[:16].replace('T', ' ') }}</td>
+                    <td style="text-align: center; font-weight: 700;">{{ b.items_count }}</td>
+                    <td style="text-align: center;"><span class="badge badge-success">{{ b.active_count }}</span></td>
+                    <td style="text-align: center;"><span class="badge badge-warning" style="background: rgba(245,158,11,0.15); color: #f59e0b;">{{ b.inactive_count }}</span></td>
+                    <td style="text-align: center;">
+                        {% if b.status == 'UNDONE' %}
+                            <span class="badge badge-muted">UNDONE</span>
+                        {% else %}
+                            <span class="badge badge-info">ACTIVE</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: right;">
+                        <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;" onclick="filterByBatch('{{ b.import_batch_id }}')">
+                            Filter
+                        </button>
+                        {% if b.status != 'UNDONE' and b.remaining_count > 0 %}
+                        <button type="button" class="btn btn-danger btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;" onclick="openUndoImportModal('{{ b.import_batch_id }}', '{{ b.filename }}')">
+                            Undo Import
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="text-align: center; padding: 1.5rem; color: var(--text-muted); font-size: 0.8125rem;">
+        No requirement or catalog imports recorded yet.
+    </div>
+    {% endif %}
+</div>
+
+<!-- Primary Interaction: Search, Status Tabs & Batch Filters -->
 <div class="card" style="padding: 1rem; margin-bottom: 1.25rem;">
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
-        <div style="flex: 1; min-width: 280px;">
-            <input type="text" id="item-search" placeholder="Search SKU, description, manufacturer PN, brand..." onkeyup="filterItems();" style="width: 100%; margin: 0; font-size: 0.875rem;">
+        <div style="flex: 1; min-width: 260px;">
+            <input type="text" id="item-search" placeholder="Search SKU, description, MPN, brand, batch ID..." onkeyup="filterItems();" style="width: 100%; margin: 0; font-size: 0.875rem;">
         </div>
-        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-            <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Filter UOM:</span>
-            <button onclick="filterByUOM('')" class="btn btn-secondary btn-sm uom-filter active-filter" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">All</button>
+        
+        <!-- Status Filter Tabs -->
+        <div style="display: flex; align-items: center; gap: 0.35rem;">
+            <button onclick="filterByStatus('')" class="btn btn-primary btn-sm status-filter active-filter" id="status-all">All ({{ total_count }})</button>
+            <button onclick="filterByStatus('ACTIVE')" class="btn btn-secondary btn-sm status-filter" id="status-active">Active ({{ active_count }})</button>
+            <button onclick="filterByStatus('INACTIVE')" class="btn btn-secondary btn-sm status-filter" id="status-inactive">Inactive ({{ inactive_count }})</button>
+        </div>
+
+        <!-- Import Batch Filter Dropdown -->
+        <div>
+            <select id="batch-filter" onchange="onBatchSelect(this.value)" style="margin: 0; font-size: 0.75rem; padding: 0.35rem 0.6rem;">
+                <option value="">All Import Batches</option>
+                {% for b in batches %}
+                <option value="{{ b.import_batch_id }}">{{ b.import_batch_id }} ({{ b.filename }})</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- UOM Filters -->
+        <div style="display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
+            <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">UOM:</span>
+            <button onclick="filterByUOM('')" class="btn btn-secondary btn-sm uom-filter active-filter" style="padding: 0.2rem 0.45rem; font-size: 0.75rem;">All</button>
             {% for uom in uoms %}
-            <button onclick="filterByUOM('{{ uom }}')" class="btn btn-secondary btn-sm uom-filter" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">{{ uom }}</button>
+            <button onclick="filterByUOM('{{ uom }}')" class="btn btn-secondary btn-sm uom-filter" style="padding: 0.2rem 0.45rem; font-size: 0.75rem;">{{ uom }}</button>
             {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Selection Floating / Action Bar -->
+<div id="bulk-action-bar" class="card" style="display: none; margin-bottom: 1.25rem; background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%); border: 1px solid var(--accent); padding: 0.75rem 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <strong style="color: var(--accent); font-size: 0.9375rem;">
+                <span id="selected-count">0</span> items selected
+            </strong>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="selectAllFiltered()" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;">
+                Select All Filtered (<span id="filtered-total-count">0</span>)
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="clearSelection()" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;">
+                Clear Selection
+            </button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="executeBulkAction('deactivate')">
+                ⏸ Deactivate Selected
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="executeBulkAction('restore')">
+                ▶ Restore Selected
+            </button>
+            <button type="button" class="btn btn-danger btn-sm" onclick="executeBulkAction('delete')">
+                🗑 Safe Delete Selected
+            </button>
         </div>
     </div>
 </div>
@@ -59,27 +188,43 @@
 <div class="card" style="margin-bottom: 2rem;">
     <div class="card-header">
         <div class="card-title">Catalog Products (<span id="visible-count">{{ total_count }}</span>)</div>
-        <div style="font-size: 0.75rem; color: var(--text-muted);">Click any product to inspect specifications and supplier cross-references</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted);">
+            Checkbox select items for bulk operations or click any row to inspect specifications
+        </div>
     </div>
     
     <div style="overflow-x: auto;">
         <table id="item-master-table">
             <thead>
                 <tr>
-                    <th style="width: 130px;">Internal SKU</th>
-                    <th style="width: 140px;">Manufacturer PN</th>
+                    <th style="width: 40px; text-align: center;">
+                        <input type="checkbox" id="select-all-visible" onchange="toggleSelectAllVisible(this.checked)" style="cursor: pointer;">
+                    </th>
+                    <th style="width: 90px;">Status</th>
+                    <th style="width: 140px;">Internal SKU</th>
+                    <th style="width: 130px;">Manufacturer PN</th>
                     <th>Canonical Product Description</th>
-                    <th style="width: 100px;">Brand</th>
-                    <th style="width: 80px;">Stock UOM</th>
-                    <th>Approved Supplier Cross-References</th>
-                    <th style="width: 90px; text-align: right;">Action</th>
+                    <th style="width: 90px;">Brand</th>
+                    <th style="width: 70px;">Stock UOM</th>
+                    <th style="width: 120px;">Provenance</th>
+                    <th style="width: 140px; text-align: right;">Action</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in items %}
-                <tr class="item-row" data-uom="{{ item.stocking_uom }}" onclick="window.location.href='/item-master/{{ item.internal_item_id }}'" style="cursor: pointer;">
+                <tr class="item-row" data-id="{{ item.internal_item_id }}" data-sku="{{ item.internal_sku }}" data-status="{{ item.status }}" data-uom="{{ item.stocking_uom }}" data-batch="{{ item.import_batch_id or '' }}">
+                    <td style="text-align: center;" onclick="event.stopPropagation();">
+                        <input type="checkbox" class="row-checkbox" value="{{ item.internal_item_id }}" onchange="updateSelectedItems()">
+                    </td>
                     <td>
-                        <code style="color: var(--success); font-weight: 700; font-size: 0.8125rem;">{{ item.internal_sku }}</code>
+                        {% if item.status == 'INACTIVE' %}
+                            <span class="badge badge-warning" style="background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3);">INACTIVE</span>
+                        {% else %}
+                            <span class="badge badge-success">ACTIVE</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <code style="color: var(--accent); font-weight: 700; font-size: 0.8125rem;">{{ item.internal_sku }}</code>
                         <div style="font-size: 0.7rem; color: var(--text-muted);">{{ item.internal_item_id }}</div>
                     </td>
                     <td>
@@ -106,23 +251,81 @@
                         <span class="badge badge-info">{{ item.stocking_uom }}</span>
                     </td>
                     <td>
-                        {% if item.approved_supplier_part_numbers %}
-                            {% for sp in item.approved_supplier_part_numbers %}
-                                <code style="color: var(--accent); font-size: 0.75rem; margin-right: 0.25rem;">{{ sp }}</code>
-                            {% endfor %}
+                        {% if item.import_batch_id %}
+                            <span class="badge badge-purple" style="font-size: 0.65rem;" title="Imported via {{ item.import_batch_id }}">{{ item.import_batch_id }}</span>
                         {% else %}
-                            <span style="color: var(--text-subtle); font-size: 0.75rem;">None registered</span>
+                            <span style="font-size: 0.7rem; color: var(--text-muted);">Baseline</span>
                         {% endif %}
                     </td>
-                    <td style="text-align: right;">
-                        <span class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;">
-                            Inspect &rarr;
-                        </span>
+                    <td style="text-align: right;" onclick="event.stopPropagation();">
+                        <div style="display: flex; justify-content: flex-end; gap: 0.25rem;">
+                            {% if item.status == 'INACTIVE' %}
+                            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.15rem 0.4rem;" onclick="restoreItem('{{ item.internal_item_id }}')">
+                                Restore
+                            </button>
+                            {% else %}
+                            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.15rem 0.4rem;" onclick="deactivateItem('{{ item.internal_item_id }}')">
+                                Deactivate
+                            </button>
+                            {% endif %}
+                            <button type="button" class="btn btn-danger btn-sm" style="font-size: 0.7rem; padding: 0.15rem 0.4rem;" onclick="deleteItem('{{ item.internal_item_id }}', '{{ item.internal_sku }}')">
+                                ✕
+                            </button>
+                            <a href="/item-master/{{ item.internal_item_id }}" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.15rem 0.4rem;">
+                                &rarr;
+                            </a>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+    </div>
+</div>
+
+<!-- Undo Import Confirmation Modal -->
+<div id="undoImportModal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 99990; display: none; align-items: center; justify-content: center;">
+    <div style="background: var(--bg-card); border: 1px solid var(--danger-border); border-radius: 14px; padding: 2rem; max-width: 520px; width: 90%; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+            <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--danger-subtle); color: var(--danger); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                ⚠️
+            </div>
+            <div>
+                <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-main); margin: 0;">Undo Import Batch?</h3>
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;" id="undo-batch-title">Batch: ...</p>
+            </div>
+        </div>
+        
+        <div id="undo-preview-loading" style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.8125rem;">
+            Analyzing historical procurement references across RFQs, quotes, and awards...
+        </div>
+
+        <div id="undo-preview-content" style="display: none; font-size: 0.8125rem; color: var(--text-main); margin-bottom: 1.5rem;">
+            <div style="background: var(--bg-card-subtle); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; border: 1px solid var(--border-color);">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+                    <span>Total items created by this import:</span>
+                    <strong id="undo-total-count">0</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem; color: var(--success);">
+                    <span>✓ Unused items to be permanently removed:</span>
+                    <strong id="undo-delete-count">0</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; color: #f59e0b;">
+                    <span>⏸ Referenced items to be safely deactivated:</span>
+                    <strong id="undo-deact-count">0</strong>
+                </div>
+            </div>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">
+                Pre-existing catalog items and items from other import batches will remain 100% untouched. Historical procurement documents will never be deleted.
+            </p>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="closeUndoModal()">Cancel</button>
+            <button type="button" class="btn btn-danger btn-sm" id="confirmUndoBtn" onclick="executeUndoImport()">
+                Confirm Undo Import
+            </button>
+        </div>
     </div>
 </div>
 
@@ -150,6 +353,14 @@
 
 <script>
     let activeUOM = '';
+    let activeStatus = '';
+    let activeBatch = '';
+    let currentUndoBatchId = null;
+
+    function toggleImportHistory() {
+        const el = document.getElementById('import-history-card');
+        el.style.display = (el.style.display === 'none' || el.style.display === '') ? 'block' : 'none';
+    }
 
     function filterItems() {
         const query = document.getElementById('item-search').value.toLowerCase().trim();
@@ -158,19 +369,51 @@
 
         rows.forEach(row => {
             const uom = row.dataset.uom;
+            const status = row.dataset.status;
+            const batch = row.dataset.batch;
             const text = row.innerText.toLowerCase();
+
             const matchesQuery = query === '' || text.includes(query);
             const matchesUOM = activeUOM === '' || uom === activeUOM;
+            const matchesStatus = activeStatus === '' || status === activeStatus;
+            const matchesBatch = activeBatch === '' || batch === activeBatch;
 
-            if (matchesQuery && matchesUOM) {
+            if (matchesQuery && matchesUOM && matchesStatus && matchesBatch) {
                 row.style.display = '';
                 visible++;
             } else {
                 row.style.display = 'none';
+                const cb = row.querySelector('.row-checkbox');
+                if (cb) cb.checked = false;
             }
         });
 
         document.getElementById('visible-count').innerText = visible;
+        document.getElementById('filtered-total-count').innerText = visible;
+        updateSelectedItems();
+    }
+
+    function filterByStatus(status) {
+        activeStatus = status;
+        document.querySelectorAll('.status-filter').forEach(btn => {
+            btn.classList.remove('btn-primary', 'active-filter');
+            btn.classList.add('btn-secondary');
+        });
+        if (status === '') document.getElementById('status-all').classList.add('btn-primary', 'active-filter');
+        else if (status === 'ACTIVE') document.getElementById('status-active').classList.add('btn-primary', 'active-filter');
+        else if (status === 'INACTIVE') document.getElementById('status-inactive').classList.add('btn-primary', 'active-filter');
+        filterItems();
+    }
+
+    function filterByBatch(batchId) {
+        activeBatch = batchId;
+        document.getElementById('batch-filter').value = batchId;
+        filterItems();
+    }
+
+    function onBatchSelect(val) {
+        activeBatch = val;
+        filterItems();
     }
 
     function filterByUOM(uom) {
@@ -185,6 +428,177 @@
             }
         });
         filterItems();
+    }
+
+    function toggleSelectAllVisible(checked) {
+        document.querySelectorAll('.item-row').forEach(row => {
+            if (row.style.display !== 'none') {
+                const cb = row.querySelector('.row-checkbox');
+                if (cb) cb.checked = checked;
+            }
+        });
+        updateSelectedItems();
+    }
+
+    function selectAllFiltered() {
+        document.querySelectorAll('.item-row').forEach(row => {
+            if (row.style.display !== 'none') {
+                const cb = row.querySelector('.row-checkbox');
+                if (cb) cb.checked = true;
+            }
+        });
+        document.getElementById('select-all-visible').checked = true;
+        updateSelectedItems();
+    }
+
+    function clearSelection() {
+        document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = false);
+        document.getElementById('select-all-visible').checked = false;
+        updateSelectedItems();
+    }
+
+    function updateSelectedItems() {
+        const checked = document.querySelectorAll('.row-checkbox:checked');
+        const count = checked.length;
+        document.getElementById('selected-count').innerText = count;
+        const bar = document.getElementById('bulk-action-bar');
+        if (count > 0) {
+            bar.style.display = 'block';
+        } else {
+            bar.style.display = 'none';
+        }
+    }
+
+    async function deactivateItem(itemId) {
+        try {
+            const res = await fetch(`/api/item-master/${itemId}/deactivate`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                location.reload();
+            } else {
+                alert(data.message || 'Failed to deactivate item.');
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function restoreItem(itemId) {
+        try {
+            const res = await fetch(`/api/item-master/${itemId}/restore`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                location.reload();
+            } else {
+                alert(data.message || 'Failed to restore item.');
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function deleteItem(itemId, sku) {
+        if (!confirm(`Are you sure you want to permanently delete item ${sku} (${itemId})? If it is referenced in any RFQs, comparisons, or awards, deletion will be safely rejected.`)) {
+            return;
+        }
+        try {
+            const res = await fetch(`/api/item-master/${itemId}/delete`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                location.reload();
+            } else {
+                alert(data.message || 'Cannot delete item: referenced in historical procurement records.');
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function executeBulkAction(action) {
+        const selectedIds = Array.from(document.querySelectorAll('.row-checkbox:checked')).map(cb => cb.value);
+        if (selectedIds.length === 0) return;
+
+        if (action === 'delete') {
+            if (!confirm(`Attempt safe hard delete of ${selectedIds.length} items? Any items referenced by historical RFQs/comparisons/awards will be preserved.`)) {
+                return;
+            }
+        }
+
+        try {
+            const res = await fetch('/api/item-master/bulk-action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action, item_ids: selectedIds })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                if (action === 'delete' && data.blocked_count > 0) {
+                    alert(`Deleted ${data.deleted_count} unused items.\n${data.blocked_count} items were preserved because they are referenced in historical procurement records.`);
+                }
+                location.reload();
+            } else {
+                alert(data.message || 'Bulk operation failed.');
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function openUndoImportModal(batchId, filename) {
+        currentUndoBatchId = batchId;
+        document.getElementById('undo-batch-title').innerText = `Batch: ${batchId} (${filename})`;
+        document.getElementById('undo-preview-loading').style.display = 'block';
+        document.getElementById('undo-preview-content').style.display = 'none';
+        document.getElementById('undoImportModal').style.display = 'flex';
+
+        try {
+            const res = await fetch(`/api/item-master/import-history/${batchId}/preview-undo`);
+            const data = await res.json();
+            if (res.ok) {
+                const preview = data.preview;
+                document.getElementById('undo-total-count').innerText = preview.total_items;
+                document.getElementById('undo-delete-count').innerText = preview.can_delete_count;
+                document.getElementById('undo-deact-count').innerText = preview.must_deactivate_count;
+                document.getElementById('undo-preview-loading').style.display = 'none';
+                document.getElementById('undo-preview-content').style.display = 'block';
+            } else {
+                alert('Failed to preview undo: ' + data.message);
+                closeUndoModal();
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+            closeUndoModal();
+        }
+    }
+
+    function closeUndoModal() {
+        document.getElementById('undoImportModal').style.display = 'none';
+        currentUndoBatchId = null;
+    }
+
+    async function executeUndoImport() {
+        if (!currentUndoBatchId) return;
+        const btn = document.getElementById('confirmUndoBtn');
+        btn.disabled = true;
+        btn.innerText = 'Processing Undo...';
+
+        try {
+            const res = await fetch(`/api/item-master/import-history/${currentUndoBatchId}/undo`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                const r = data.result;
+                alert(`Undo Import Completed:\n• ${r.deleted_count} unreferenced items removed\n• ${r.deactivated_count} historically referenced items safely deactivated`);
+                location.reload();
+            } else {
+                alert(data.message || 'Undo import failed.');
+                btn.disabled = false;
+                btn.innerText = 'Confirm Undo Import';
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+            btn.disabled = false;
+            btn.innerText = 'Confirm Undo Import';
+        }
     }
 </script>
 {% endblock %}

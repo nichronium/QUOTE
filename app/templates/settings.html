@@ -33,6 +33,36 @@
     </div>
 </div>
 
+<!-- Edit Supplier Modal -->
+<div id="editSupplierModal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 99990; display: none; align-items: center; justify-content: center;">
+    <div style="background: var(--bg-card); border: 1px solid var(--accent); border-radius: 14px; padding: 2rem; max-width: 480px; width: 90%; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+            <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--bg-card-subtle); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                🏢
+            </div>
+            <div>
+                <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-main); margin: 0;">Edit Supplier Master Record</h3>
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;" id="edit-supplier-id-display">Supplier ID: ...</p>
+            </div>
+        </div>
+        <div style="margin-bottom: 1.25rem;">
+            <label style="display: block; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.35rem;">
+                Master Display Name
+            </label>
+            <input type="text" id="edit-supplier-name-input" style="width: 100%; font-size: 0.875rem;">
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0.35rem 0 0 0;">
+                The Supplier ID remains permanently immutable. Changes will be audited in Name History and applied to future procurement rounds without altering historical finalized awards.
+            </p>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="closeEditSupplierModal()">Cancel</button>
+            <button type="button" class="btn btn-primary btn-sm" id="saveSupplierNameBtn" onclick="saveSupplierName()">
+                Save Supplier Name
+            </button>
+        </div>
+    </div>
+</div>
+
 <div class="breadcrumb-bar">
     <div class="breadcrumbs">
         <a href="/">Home</a>
@@ -245,11 +275,87 @@
         </form>
     </div>
 
-    <!-- Section 3: Data Management & Reset Center -->
+    <!-- Section 3: Supplier Master Directory & Governance -->
+    <div class="card" style="border-top: 3px solid var(--accent); margin-bottom: 1.5rem;">
+        <div class="card-header">
+            <div>
+                <div class="card-title">3. Supplier Master Directory &amp; Governance</div>
+                <div style="font-size: 0.8125rem; color: var(--text-muted);">
+                    Manage immutable supplier identities, master display names, audit history, and active status.
+                </div>
+            </div>
+        </div>
+
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 140px;">Supplier ID</th>
+                        <th>Master Display Name</th>
+                        <th style="width: 100px;">Status</th>
+                        <th style="width: 160px;">Name History</th>
+                        <th style="width: 180px; text-align: right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for supp in suppliers %}
+                    <tr id="supp-row-{{ supp.supplier_id }}">
+                        <td>
+                            <code style="color: var(--accent); font-weight: 700; font-size: 0.8125rem;">{{ supp.supplier_id }}</code>
+                        </td>
+                        <td>
+                            <strong style="color: var(--text-main); font-size: 0.875rem;" id="supp-name-{{ supp.supplier_id }}">{{ supp.supplier_name }}</strong>
+                        </td>
+                        <td>
+                            {% if supp.status == 'INACTIVE' %}
+                                <span class="badge badge-warning" style="background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3);" id="supp-badge-{{ supp.supplier_id }}">INACTIVE</span>
+                            {% else %}
+                                <span class="badge badge-success" id="supp-badge-{{ supp.supplier_id }}">ACTIVE</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if supp.name_history %}
+                                <div style="font-size: 0.7rem; color: var(--text-muted);">
+                                    Renamed {{ supp.name_history|length }} time(s):
+                                    {% for nh in supp.name_history %}
+                                        <div><s style="color: var(--text-subtle);">{{ nh.old_name }}</s> &rarr; <span style="color: var(--accent);">{{ nh.new_name }}</span></div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <span style="font-size: 0.75rem; color: var(--text-subtle);">Original name</span>
+                            {% endif %}
+                        </td>
+                        <td style="text-align: right;">
+                            <div style="display: flex; justify-content: flex-end; gap: 0.35rem;">
+                                <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;" onclick="openEditSupplierModal('{{ supp.supplier_id }}', '{{ supp.supplier_name|escape }}')">
+                                    Edit Name
+                                </button>
+                                {% if supp.status == 'INACTIVE' %}
+                                <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;" onclick="restoreSupplier('{{ supp.supplier_id }}')">
+                                    Restore
+                                </button>
+                                {% else %}
+                                <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;" onclick="deactivateSupplier('{{ supp.supplier_id }}')">
+                                    Deactivate
+                                </button>
+                                {% endif %}
+                                <button type="button" class="btn btn-danger btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;" onclick="deleteSupplier('{{ supp.supplier_id }}')">
+                                    ✕
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Section 4: Data Management & Reset Center -->
     <div class="card" style="border-top: 3px solid var(--danger);">
         <div class="card-header">
             <div>
-                <div class="card-title" style="color: var(--danger);">3. Data Management &amp; Application Reset</div>
+                <div class="card-title" style="color: var(--danger);">4. Data Management &amp; Application Reset</div>
                 <div style="font-size: 0.8125rem; color: var(--text-muted);">
                     Clean the database slate, seed demonstration rounds, or export JSON backups.
                 </div>
@@ -442,6 +548,104 @@
             }
         } catch (e) {
             alert('Error seeding demo data');
+        }
+    }
+
+    // 5. Supplier Master Management Handlers
+    let currentEditSupplierId = null;
+
+    function openEditSupplierModal(suppId, suppName) {
+        currentEditSupplierId = suppId;
+        document.getElementById('edit-supplier-id-display').innerText = 'Supplier ID: ' + suppId;
+        document.getElementById('edit-supplier-name-input').value = suppName;
+        document.getElementById('editSupplierModal').style.display = 'flex';
+        document.getElementById('edit-supplier-name-input').focus();
+    }
+
+    function closeEditSupplierModal() {
+        document.getElementById('editSupplierModal').style.display = 'none';
+        currentEditSupplierId = null;
+    }
+
+    async function saveSupplierName() {
+        if (!currentEditSupplierId) return;
+        const newName = document.getElementById('edit-supplier-name-input').value.trim();
+        if (!newName) {
+            alert('Supplier name cannot be empty.');
+            return;
+        }
+
+        const btn = document.getElementById('saveSupplierNameBtn');
+        btn.disabled = true;
+        btn.innerText = 'Saving...';
+
+        try {
+            const res = await fetch(`/api/suppliers/${currentEditSupplierId}/edit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ supplier_name: newName })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                closeEditSupplierModal();
+                showToast('✓ ' + data.message);
+                setTimeout(() => location.reload(), 500);
+            } else {
+                alert(data.message || 'Failed to update supplier name.');
+                btn.disabled = false;
+                btn.innerText = 'Save Supplier Name';
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+            btn.disabled = false;
+            btn.innerText = 'Save Supplier Name';
+        }
+    }
+
+    async function deactivateSupplier(suppId) {
+        if (!confirm(`Deactivate supplier ${suppId}? Inactive suppliers cannot receive new awards.`)) return;
+        try {
+            const res = await fetch(`/api/suppliers/${suppId}/deactivate`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                showToast('✓ ' + data.message);
+                setTimeout(() => location.reload(), 500);
+            } else {
+                alert(data.message || 'Failed to deactivate supplier.');
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function restoreSupplier(suppId) {
+        try {
+            const res = await fetch(`/api/suppliers/${suppId}/restore`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                showToast('✓ ' + data.message);
+                setTimeout(() => location.reload(), 500);
+            } else {
+                alert(data.message || 'Failed to restore supplier.');
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function deleteSupplier(suppId) {
+        if (!confirm(`Permanently delete supplier ${suppId}? If the supplier is referenced in any quotes, comparisons, or awards, deletion will be safely rejected.`)) return;
+        try {
+            const res = await fetch(`/api/suppliers/${suppId}/delete`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                showToast('✓ ' + data.message);
+                setTimeout(() => location.reload(), 500);
+            } else {
+                alert(data.message || 'Cannot delete supplier: referenced in historical procurement records.');
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
         }
     }
 

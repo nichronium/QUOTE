@@ -156,11 +156,17 @@ async def upload_quote_to_rfq(request: Request, rfq_id: str):
 # =========================================================================
 # 2. CANONICAL ITEM MASTER CATALOG (COMPANY PRODUCT DATABASE)
 # =========================================================================
+# =========================================================================
+# 2. CANONICAL ITEM MASTER CATALOG (COMPANY PRODUCT DATABASE)
+# =========================================================================
 @router.get("/item-master", response_class=HTMLResponse)
 async def item_master_page(request: Request):
-    items = services.get_item_master()
+    items = services.get_item_master(include_inactive=True)
     brands = sorted(list({it.brand for it in items if it.brand}))
     uoms = sorted(list({it.stocking_uom for it in items if it.stocking_uom}))
+    batches = services.get_import_batches()
+    active_count = sum(1 for it in items if it.status != "INACTIVE")
+    inactive_count = sum(1 for it in items if it.status == "INACTIVE")
     return templates.TemplateResponse(
         request=request,
         name="item_master/index.html",
@@ -168,10 +174,76 @@ async def item_master_page(request: Request):
             "items": items,
             "brands": brands,
             "uoms": uoms,
+            "batches": batches,
             "total_count": len(items),
+            "active_count": active_count,
+            "inactive_count": inactive_count,
             "active_tab": "item_master"
         }
     )
+
+
+@router.post("/api/item-master/{item_id}/deactivate")
+async def api_deactivate_item_master(item_id: str):
+    success, msg = services.deactivate_item_master_record(item_id)
+    if not success:
+        return JSONResponse(status_code=400, content={"status": "error", "message": msg})
+    return JSONResponse(content={"status": "success", "message": msg})
+
+
+@router.post("/api/item-master/{item_id}/restore")
+async def api_restore_item_master(item_id: str):
+    success, msg = services.restore_item_master_record(item_id)
+    if not success:
+        return JSONResponse(status_code=400, content={"status": "error", "message": msg})
+    return JSONResponse(content={"status": "success", "message": msg})
+
+
+@router.post("/api/item-master/{item_id}/delete")
+async def api_delete_item_master(item_id: str):
+    success, msg = services.delete_item_master_record(item_id)
+    if not success:
+        return JSONResponse(status_code=400, content={"status": "error", "message": msg})
+    return JSONResponse(content={"status": "success", "message": msg})
+
+
+@router.post("/api/item-master/bulk-action")
+async def api_bulk_action_item_master(request: Request):
+    data = await request.json()
+    action = data.get("action")
+    item_ids = data.get("item_ids", [])
+    if not item_ids:
+        return JSONResponse(status_code=400, content={"status": "error", "message": "No items selected."})
+
+    if action == "deactivate":
+        count = services.bulk_deactivate_items(item_ids)
+        return JSONResponse(content={"status": "success", "message": f"Deactivated {count} items.", "count": count})
+    elif action == "restore":
+        count = services.bulk_restore_items(item_ids)
+        return JSONResponse(content={"status": "success", "message": f"Restored {count} items to Active.", "count": count})
+    elif action == "delete":
+        res = services.bulk_delete_items(item_ids)
+        return JSONResponse(content={"status": "success", "deleted_count": res["deleted_count"], "blocked_count": res["blocked_count"], "blocked_items": res["blocked_items"]})
+    else:
+        return JSONResponse(status_code=400, content={"status": "error", "message": f"Unknown action '{action}'."})
+
+
+@router.get("/api/item-master/import-history")
+async def api_get_import_history():
+    batches = services.get_import_batches()
+    return JSONResponse(content={"status": "success", "batches": batches})
+
+
+@router.get("/api/item-master/import-history/{batch_id}/preview-undo")
+async def api_preview_undo_import_batch(batch_id: str):
+    preview = services.preview_undo_import_batch(batch_id)
+    return JSONResponse(content={"status": "success", "preview": preview})
+
+
+@router.post("/api/item-master/import-history/{batch_id}/undo")
+async def api_undo_import_batch(batch_id: str):
+    result = services.undo_import_batch(batch_id)
+    return JSONResponse(content={"status": "success", "result": result})
 
 
 @router.get("/item-master/import", response_class=HTMLResponse)
@@ -889,14 +961,59 @@ async def preview_rfq_requirements(file: UploadFile = File(...)):
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     settings_data = services.get_application_settings()
+    suppliers = services.get_supplier_master(include_inactive=True)
     return templates.TemplateResponse(
         request=request,
         name="settings.html",
         context={
             "settings": settings_data,
+            "suppliers": suppliers,
             "active_tab": "settings"
         }
     )
+
+
+# =========================================================================
+# SUPPLIER MASTER API ENDPOINTS
+# =========================================================================
+@router.get("/api/suppliers")
+async def api_get_suppliers():
+    suppliers = services.get_supplier_master(include_inactive=True)
+    return JSONResponse(content={"status": "success", "suppliers": [s.model_dump(mode="json") for s in suppliers]})
+
+
+@router.post("/api/suppliers/{supplier_id}/edit")
+async def api_edit_supplier(supplier_id: str, request: Request):
+    data = await request.json()
+    new_name = data.get("supplier_name", "")
+    success, msg, rec = services.update_supplier_name(supplier_id, new_name)
+    if not success:
+        return JSONResponse(status_code=400, content={"status": "error", "message": msg})
+    return JSONResponse(content={"status": "success", "message": msg, "supplier": rec.model_dump(mode="json") if rec else None})
+
+
+@router.post("/api/suppliers/{supplier_id}/deactivate")
+async def api_deactivate_supplier(supplier_id: str):
+    success, msg = services.deactivate_supplier(supplier_id)
+    if not success:
+        return JSONResponse(status_code=400, content={"status": "error", "message": msg})
+    return JSONResponse(content={"status": "success", "message": msg})
+
+
+@router.post("/api/suppliers/{supplier_id}/restore")
+async def api_restore_supplier(supplier_id: str):
+    success, msg = services.restore_supplier(supplier_id)
+    if not success:
+        return JSONResponse(status_code=400, content={"status": "error", "message": msg})
+    return JSONResponse(content={"status": "success", "message": msg})
+
+
+@router.post("/api/suppliers/{supplier_id}/delete")
+async def api_delete_supplier(supplier_id: str):
+    success, msg = services.delete_supplier(supplier_id)
+    if not success:
+        return JSONResponse(status_code=400, content={"status": "error", "message": msg})
+    return JSONResponse(content={"status": "success", "message": msg})
 
 
 @router.post("/settings")

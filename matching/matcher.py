@@ -39,8 +39,7 @@ class ItemMatcher:
         item_master: List[ItemMasterRecord],
         rfq_lines: Optional[List[RFQLineItem]] = None
     ) -> List[MatchedQuoteItem]:
-        """Matches all line items in a CanonicalQuote without mutating original data."""
-        effective_master = list(item_master)
+        effective_master = [im for im in item_master if getattr(im, "status", "ACTIVE") != "INACTIVE"]
         if rfq_lines:
             existing_skus = {self._normalize_code(im.internal_sku) for im in effective_master if im.internal_sku}
             existing_ids = {im.internal_item_id for im in effective_master if im.internal_item_id}

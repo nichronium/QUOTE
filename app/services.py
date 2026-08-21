@@ -36,7 +36,18 @@ from datasets.procurement_benchmark.dataset import (
 from extraction.extractor import QuoteExtractor
 from extraction.catalog_extractor import CatalogExtractor, CatalogExtractionResult
 from matching.matcher import ItemMatcher
-from matching.models import ItemMasterRecord, MatchCandidate, MatchedQuoteItem, MatchMethod, MatchStatus, RFQLineItem
+from matching.models import (
+    ItemMasterRecord,
+    ItemStatus,
+    MatchCandidate,
+    MatchedQuoteItem,
+    MatchMethod,
+    MatchStatus,
+    RFQLineItem,
+    SupplierMasterRecord,
+    SupplierNameChange,
+    ImportBatchRecord,
+)
 from parsers.csv_parser import CSVParser
 from parsers.excel_parser import ExcelParser
 from parsers.pdf_parser import PDFParser
@@ -153,10 +164,11 @@ def get_rfq(rfq_id: str) -> Optional[RFQDocument]:
 
 def create_rfq(rfq_id: str, title: str, base_currency: str, items: List[Dict[str, Any]]) -> RFQDocument:
     # 1. Auto-register any new items into company Item Master so catalog stays unified and supplier quotes match seamlessly
-    current_im = get_item_master()
+    current_im = get_item_master(include_inactive=True)
     existing_skus = {im.internal_sku.upper().strip() for im in current_im if im.internal_sku}
     existing_ids = {im.internal_item_id for im in current_im if im.internal_item_id}
     new_im_records = []
+    batch_id = f"IMP-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
 
     for idx, it in enumerate(items):
         sku = (it.get("sku") or it.get("internal_sku") or it.get("rfq_line_id") or f"SKU-{idx+1:03d}").strip().upper()
@@ -173,7 +185,10 @@ def create_rfq(rfq_id: str, title: str, base_currency: str, items: List[Dict[str
                 internal_sku=sku,
                 canonical_description=desc,
                 stocking_uom=uom_val or "PCS",
-                brand="Standard"
+                brand="Standard",
+                status="ACTIVE",
+                import_batch_id=batch_id,
+                created_at=datetime.utcnow().isoformat()
             ))
             existing_skus.add(sku)
             existing_ids.add(item_id)
@@ -181,6 +196,12 @@ def create_rfq(rfq_id: str, title: str, base_currency: str, items: List[Dict[str
     if new_im_records:
         current_im.extend(new_im_records)
         save_item_master(current_im)
+        record_import_batch(
+            batch_id=batch_id,
+            filename=f"RFQ: {title or rfq_id}",
+            item_ids=[nr.internal_item_id for nr in new_im_records],
+            source_type="RFQ_REQUIREMENTS"
+        )
 
     # 2. Build RFQLineItem list with honest source quantity and UOM
     rfq_items = []
@@ -239,17 +260,23 @@ def ensure_item_master_initialized():
 ensure_item_master_initialized()
 
 
-def get_item_master() -> List[ItemMasterRecord]:
-    """Returns company Item Master catalog records."""
+def get_item_master(include_inactive: bool = False) -> List[ItemMasterRecord]:
+    """Returns company Item Master catalog records. Defaults to ACTIVE only."""
     catalog_file = ITEM_MASTER_DIR / "catalog.json"
     if not catalog_file.exists():
         ensure_item_master_initialized()
     try:
         with open(catalog_file, "r", encoding="utf-8") as f:
             data = json.load(f)
-            return [ItemMasterRecord.model_validate(d) for d in data]
+            records = [ItemMasterRecord.model_validate(d) for d in data]
+            if include_inactive:
+                return records
+            return [r for r in records if r.status != "INACTIVE"]
     except Exception:
-        return get_benchmark_item_master()
+        bench = get_benchmark_item_master()
+        if include_inactive:
+            return bench
+        return [r for r in bench if r.status != "INACTIVE"]
 
 
 def save_item_master(items: List[ItemMasterRecord]):
@@ -269,7 +296,7 @@ def add_item_to_master(
     specifications: Optional[Dict[str, str]] = None
 ) -> ItemMasterRecord:
     """Adds a single product record to the company Item Master catalog."""
-    items = get_item_master()
+    items = get_item_master(include_inactive=True)
     existing_ids = [it.internal_item_id for it in items if it.internal_item_id.startswith("ITEM-")]
     indices = []
     for i in existing_ids:
@@ -288,7 +315,9 @@ def add_item_to_master(
         canonical_description=canonical_description.strip(),
         stocking_uom=stocking_uom.strip().upper() or "PCS",
         brand=brand.strip() if brand else "Standard",
-        specifications=specifications or {}
+        specifications=specifications or {},
+        status="ACTIVE",
+        created_at=datetime.utcnow().isoformat()
     )
     items.append(record)
     save_item_master(items)
@@ -296,12 +325,562 @@ def add_item_to_master(
 
 
 def get_item_master_item(item_id: str) -> Optional[ItemMasterRecord]:
-    """Retrieves a single item from the company Item Master catalog."""
-    items = get_item_master()
+    """Retrieves a single item from the company Item Master catalog (including inactive)."""
+    items = get_item_master(include_inactive=True)
     for it in items:
-        if it.internal_item_id == item_id or it.internal_sku == item_id:
+        if it.internal_item_id == item_id or it.internal_sku.upper() == item_id.upper():
             return it
     return None
+
+
+# =========================================================================
+# ITEM & SUPPLIER MASTER LIFECYCLE & DEPENDENCY CHECKS
+# =========================================================================
+
+IMPORT_BATCHES_FILE = ITEM_MASTER_DIR / "import_batches.json"
+SUPPLIERS_FILE = ITEM_MASTER_DIR / "suppliers.json"
+
+
+def check_item_dependencies(item_id: str, sku: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Checks if an Item Master record is referenced by any RFQ, Quote matching, Comparison, or Award.
+    """
+    references = []
+    target_sku = sku.strip().upper() if sku else None
+
+    # 1. Check RFQs
+    if RFQS_DIR.exists():
+        for rfq_file in RFQS_DIR.glob("*.json"):
+            try:
+                with open(rfq_file, "r", encoding="utf-8") as f:
+                    rfq_data = json.load(f)
+                    for it in rfq_data.get("items", []):
+                        if it.get("internal_item_id") == item_id or (target_sku and str(it.get("sku", "")).upper() == target_sku):
+                            references.append(f"RFQ '{rfq_data.get('rfq_id')}' ({rfq_data.get('title', 'RFQ')})")
+                            break
+            except Exception:
+                continue
+
+    # 2. Check Quote Matching records
+    if DATA_DIR.exists():
+        for q_dir in DATA_DIR.iterdir():
+            if not q_dir.is_dir() or q_dir.name in ["rfqs", "comparisons", "awards", "item_master", "benchmark_fixtures"]:
+                continue
+            matched_file = q_dir / "matching" / "matched_items.json"
+            if matched_file.exists():
+                try:
+                    with open(matched_file, "r", encoding="utf-8") as f:
+                        matched_items = json.load(f)
+                        for m in matched_items:
+                            imm = m.get("item_master_match")
+                            if imm:
+                                if imm.get("candidate_item_id") == item_id or (target_sku and str(imm.get("candidate_sku", "")).upper() == target_sku):
+                                    references.append(f"Quotation Matching '{q_dir.name}'")
+                                    break
+                except Exception:
+                    continue
+
+    # 3. Check Comparisons
+    if COMPARISONS_DIR.exists():
+        for comp_file in COMPARISONS_DIR.glob("*.json"):
+            try:
+                with open(comp_file, "r", encoding="utf-8") as f:
+                    comp_data = json.load(f)
+                    comp_obj = comp_data.get("comparison", {})
+                    for ic in comp_obj.get("item_comparisons", []):
+                        if ic.get("internal_item_id") == item_id or (target_sku and str(ic.get("sku", "")).upper() == target_sku):
+                            references.append(f"Commercial Comparison '{comp_data.get('comparison_id', comp_file.stem)}'")
+                            break
+            except Exception:
+                continue
+
+    # 4. Check Awards
+    if AWARDS_DIR.exists():
+        for award_file in AWARDS_DIR.glob("*.json"):
+            try:
+                with open(award_file, "r", encoding="utf-8") as f:
+                    award_data = json.load(f)
+                    for alloc in award_data.get("allocations", []):
+                        if alloc.get("internal_item_id") == item_id or (target_sku and str(alloc.get("sku", "")).upper() == target_sku):
+                            references.append(f"Award Decision '{award_data.get('rfq_id', award_file.stem)}'")
+                            break
+            except Exception:
+                continue
+
+    return {
+        "is_referenced": len(references) > 0,
+        "references": references,
+        "reference_count": len(references)
+    }
+
+
+def deactivate_item_master_record(item_id: str) -> Tuple[bool, str]:
+    catalog = get_item_master(include_inactive=True)
+    for it in catalog:
+        if it.internal_item_id == item_id or it.internal_sku.upper() == item_id.upper():
+            it.status = "INACTIVE"
+            save_item_master(catalog)
+            return True, f"Item '{it.internal_sku}' ({it.internal_item_id}) has been deactivated."
+    return False, f"Item '{item_id}' not found in catalog."
+
+
+def restore_item_master_record(item_id: str) -> Tuple[bool, str]:
+    catalog = get_item_master(include_inactive=True)
+    for it in catalog:
+        if it.internal_item_id == item_id or it.internal_sku.upper() == item_id.upper():
+            it.status = "ACTIVE"
+            save_item_master(catalog)
+            return True, f"Item '{it.internal_sku}' ({it.internal_item_id}) has been restored to Active."
+    return False, f"Item '{item_id}' not found in catalog."
+
+
+def delete_item_master_record(item_id: str) -> Tuple[bool, str]:
+    catalog = get_item_master(include_inactive=True)
+    target = None
+    for it in catalog:
+        if it.internal_item_id == item_id or it.internal_sku.upper() == item_id.upper():
+            target = it
+            break
+
+    if not target:
+        return False, f"Item '{item_id}' not found in catalog."
+
+    deps = check_item_dependencies(target.internal_item_id, target.internal_sku)
+    if deps["is_referenced"]:
+        ref_summary = ", ".join(deps["references"][:3])
+        if len(deps["references"]) > 3:
+            ref_summary += f" (+{len(deps['references'])-3} more)"
+        return False, f"Cannot hard delete '{target.internal_sku}': referenced in {deps['reference_count']} historical record(s) ({ref_summary}). Deactivate the item instead."
+
+    new_catalog = [it for it in catalog if it.internal_item_id != target.internal_item_id]
+    save_item_master(new_catalog)
+    return True, f"Item '{target.internal_sku}' ({target.internal_item_id}) has been permanently deleted."
+
+
+def bulk_deactivate_items(item_ids: List[str]) -> int:
+    catalog = get_item_master(include_inactive=True)
+    id_set = {i.strip().upper() for i in item_ids}
+    count = 0
+    for it in catalog:
+        if (it.internal_item_id.upper() in id_set or it.internal_sku.upper() in id_set) and it.status != "INACTIVE":
+            it.status = "INACTIVE"
+            count += 1
+    if count > 0:
+        save_item_master(catalog)
+    return count
+
+
+def bulk_restore_items(item_ids: List[str]) -> int:
+    catalog = get_item_master(include_inactive=True)
+    id_set = {i.strip().upper() for i in item_ids}
+    count = 0
+    for it in catalog:
+        if (it.internal_item_id.upper() in id_set or it.internal_sku.upper() in id_set) and it.status != "ACTIVE":
+            it.status = "ACTIVE"
+            count += 1
+    if count > 0:
+        save_item_master(catalog)
+    return count
+
+
+def bulk_delete_items(item_ids: List[str]) -> Dict[str, Any]:
+    catalog = get_item_master(include_inactive=True)
+    id_set = {i.strip().upper() for i in item_ids}
+    deleted_ids = []
+    blocked = []
+
+    for it in catalog:
+        if it.internal_item_id.upper() in id_set or it.internal_sku.upper() in id_set:
+            deps = check_item_dependencies(it.internal_item_id, it.internal_sku)
+            if deps["is_referenced"]:
+                blocked.append({
+                    "item_id": it.internal_item_id,
+                    "sku": it.internal_sku,
+                    "references": deps["references"]
+                })
+            else:
+                deleted_ids.append(it.internal_item_id)
+
+    if deleted_ids:
+        del_set = set(deleted_ids)
+        new_catalog = [it for it in catalog if it.internal_item_id not in del_set]
+        save_item_master(new_catalog)
+
+    return {
+        "deleted_count": len(deleted_ids),
+        "blocked_count": len(blocked),
+        "deleted_ids": deleted_ids,
+        "blocked_items": blocked
+    }
+
+
+def record_import_batch(batch_id: str, filename: str, item_ids: List[str], source_type: str = "RFQ_REQUIREMENTS") -> ImportBatchRecord:
+    ITEM_MASTER_DIR.mkdir(parents=True, exist_ok=True)
+    batches = []
+    if IMPORT_BATCHES_FILE.exists():
+        try:
+            with open(IMPORT_BATCHES_FILE, "r", encoding="utf-8") as f:
+                batches = [ImportBatchRecord.model_validate(b) for b in json.load(f)]
+        except Exception:
+            batches = []
+
+    rec = ImportBatchRecord(
+        import_batch_id=batch_id,
+        filename=filename,
+        imported_at=datetime.utcnow().isoformat(),
+        item_ids=item_ids,
+        items_count=len(item_ids),
+        status="COMPLETED",
+        source_type=source_type
+    )
+    batches.insert(0, rec)
+    with open(IMPORT_BATCHES_FILE, "w", encoding="utf-8") as f:
+        json.dump([b.model_dump(mode="json") for b in batches], f, indent=2)
+    return rec
+
+
+def get_import_batches() -> List[Dict[str, Any]]:
+    if not IMPORT_BATCHES_FILE.exists():
+        return []
+    try:
+        with open(IMPORT_BATCHES_FILE, "r", encoding="utf-8") as f:
+            batch_data = json.load(f)
+            batches = [ImportBatchRecord.model_validate(b) for b in batch_data]
+    except Exception:
+        return []
+
+    catalog_items = get_item_master(include_inactive=True)
+    catalog_by_id = {it.internal_item_id: it for it in catalog_items}
+
+    results = []
+    for b in batches:
+        active_c = 0
+        inactive_c = 0
+        remaining_c = 0
+        for i_id in b.item_ids:
+            if i_id in catalog_by_id:
+                remaining_c += 1
+                if catalog_by_id[i_id].status == "INACTIVE":
+                    inactive_c += 1
+                else:
+                    active_c += 1
+
+        results.append({
+            "import_batch_id": b.import_batch_id,
+            "filename": b.filename,
+            "imported_at": b.imported_at,
+            "items_count": b.items_count,
+            "remaining_count": remaining_c,
+            "active_count": active_c,
+            "inactive_count": inactive_c,
+            "status": b.status,
+            "source_type": b.source_type
+        })
+    return results
+
+
+def preview_undo_import_batch(batch_id: str) -> Dict[str, Any]:
+    catalog_items = get_item_master(include_inactive=True)
+    batch_items = [it for it in catalog_items if it.import_batch_id == batch_id]
+
+    can_delete = []
+    must_deactivate = []
+
+    for it in batch_items:
+        deps = check_item_dependencies(it.internal_item_id, it.internal_sku)
+        if deps["is_referenced"]:
+            must_deactivate.append({
+                "item_id": it.internal_item_id,
+                "sku": it.internal_sku,
+                "description": it.canonical_description,
+                "references": deps["references"]
+            })
+        else:
+            can_delete.append({
+                "item_id": it.internal_item_id,
+                "sku": it.internal_sku,
+                "description": it.canonical_description
+            })
+
+    batch_filename = batch_id
+    if IMPORT_BATCHES_FILE.exists():
+        try:
+            with open(IMPORT_BATCHES_FILE, "r", encoding="utf-8") as f:
+                for b in json.load(f):
+                    if b.get("import_batch_id") == batch_id:
+                        batch_filename = b.get("filename", batch_id)
+                        break
+        except Exception:
+            pass
+
+    return {
+        "batch_id": batch_id,
+        "filename": batch_filename,
+        "total_items": len(batch_items),
+        "can_delete_count": len(can_delete),
+        "must_deactivate_count": len(must_deactivate),
+        "can_delete_items": can_delete,
+        "must_deactivate_items": must_deactivate
+    }
+
+
+def undo_import_batch(batch_id: str) -> Dict[str, Any]:
+    catalog_items = get_item_master(include_inactive=True)
+    deleted_skus = []
+    deactivated_skus = []
+    retained_items = []
+
+    for it in catalog_items:
+        if it.import_batch_id == batch_id:
+            deps = check_item_dependencies(it.internal_item_id, it.internal_sku)
+            if deps["is_referenced"]:
+                it.status = "INACTIVE"
+                retained_items.append(it)
+                deactivated_skus.append(it.internal_sku)
+            else:
+                deleted_skus.append(it.internal_sku)
+        else:
+            retained_items.append(it)
+
+    save_item_master(retained_items)
+
+    if IMPORT_BATCHES_FILE.exists():
+        try:
+            with open(IMPORT_BATCHES_FILE, "r", encoding="utf-8") as f:
+                batches = json.load(f)
+                for b in batches:
+                    if b.get("import_batch_id") == batch_id:
+                        b["status"] = "UNDONE"
+            with open(IMPORT_BATCHES_FILE, "w", encoding="utf-8") as f:
+                json.dump(batches, f, indent=2)
+        except Exception:
+            pass
+
+    return {
+        "batch_id": batch_id,
+        "deleted_count": len(deleted_skus),
+        "deactivated_count": len(deactivated_skus),
+        "deleted_skus": deleted_skus,
+        "deactivated_skus": deactivated_skus
+    }
+
+
+# =========================================================================
+# SUPPLIER MASTER LIFECYCLE & IMMUTABLE IDENTITY
+# =========================================================================
+
+def ensure_supplier_master_initialized():
+    """Seeds canonical Supplier Master into suppliers.json if it doesn't exist."""
+    ITEM_MASTER_DIR.mkdir(parents=True, exist_ok=True)
+    if not SUPPLIERS_FILE.exists():
+        initial_suppliers = [
+            SupplierMasterRecord(
+                supplier_id="BENCH-SUPP-A",
+                supplier_name="Alpha Industrial Supplies",
+                status="ACTIVE",
+                created_at="2026-01-01T00:00:00Z"
+            ),
+            SupplierMasterRecord(
+                supplier_id="BENCH-SUPP-B",
+                supplier_name="Bharat Industrial Components",
+                status="ACTIVE",
+                created_at="2026-01-01T00:00:00Z"
+            ),
+            SupplierMasterRecord(
+                supplier_id="BENCH-SUPP-C",
+                supplier_name="Continental Machinery Corp",
+                status="ACTIVE",
+                created_at="2026-01-01T00:00:00Z"
+            ),
+            SupplierMasterRecord(
+                supplier_id="BENCH-SUPP-D",
+                supplier_name="Delta Fasteners & Seals",
+                status="ACTIVE",
+                created_at="2026-01-01T00:00:00Z"
+            ),
+            SupplierMasterRecord(
+                supplier_id="BENCH-SUPP-E",
+                supplier_name="Elite Electricals & Cable Corp",
+                status="ACTIVE",
+                created_at="2026-01-01T00:00:00Z"
+            ),
+        ]
+        with open(SUPPLIERS_FILE, "w", encoding="utf-8") as f:
+            json.dump([s.model_dump(mode="json") for s in initial_suppliers], f, indent=2)
+
+
+ensure_supplier_master_initialized()
+
+
+def get_supplier_master(include_inactive: bool = True) -> List[SupplierMasterRecord]:
+    """Returns all suppliers from Supplier Master."""
+    ensure_supplier_master_initialized()
+    try:
+        with open(SUPPLIERS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            records = [SupplierMasterRecord.model_validate(d) for d in data]
+            if include_inactive:
+                return records
+            return [s for s in records if s.status != "INACTIVE"]
+    except Exception:
+        return []
+
+
+def get_supplier(supplier_id: str) -> Optional[SupplierMasterRecord]:
+    for s in get_supplier_master(include_inactive=True):
+        if s.supplier_id == supplier_id:
+            return s
+    return None
+
+
+def save_supplier_master(suppliers: List[SupplierMasterRecord]):
+    ensure_supplier_master_initialized()
+    with open(SUPPLIERS_FILE, "w", encoding="utf-8") as f:
+        json.dump([s.model_dump(mode="json") for s in suppliers], f, indent=2)
+
+
+def register_supplier_if_not_exists(supplier_id: str, supplier_name: str) -> SupplierMasterRecord:
+    """Auto-registers a supplier into Supplier Master if not present."""
+    suppliers = get_supplier_master(include_inactive=True)
+    for s in suppliers:
+        if s.supplier_id == supplier_id:
+            return s
+    new_supp = SupplierMasterRecord(
+        supplier_id=supplier_id,
+        supplier_name=supplier_name or supplier_id,
+        status="ACTIVE",
+        created_at=datetime.utcnow().isoformat()
+    )
+    suppliers.append(new_supp)
+    save_supplier_master(suppliers)
+    return new_supp
+
+
+def check_supplier_dependencies(supplier_id: str) -> Dict[str, Any]:
+    """
+    Checks if a Supplier Master record is referenced by any Quote, Comparison, or Award.
+    """
+    references = []
+    supp_id_clean = supplier_id.strip()
+
+    # 1. Check Quotes in DATA_DIR
+    if DATA_DIR.exists():
+        for q_dir in DATA_DIR.iterdir():
+            if not q_dir.is_dir() or q_dir.name in ["rfqs", "comparisons", "awards", "item_master", "benchmark_fixtures"]:
+                continue
+            meta_file = q_dir / "metadata.json"
+            if meta_file.exists():
+                try:
+                    with open(meta_file, "r", encoding="utf-8") as f:
+                        meta = json.load(f)
+                        if meta.get("supplier_id") == supp_id_clean or meta.get("test_id") == supp_id_clean or q_dir.name == supp_id_clean:
+                            references.append(f"Quotation '{q_dir.name}' ({meta.get('test_name', 'Quote')})")
+                except Exception:
+                    continue
+
+    # 2. Check Comparisons
+    if COMPARISONS_DIR.exists():
+        for comp_file in COMPARISONS_DIR.glob("*.json"):
+            try:
+                with open(comp_file, "r", encoding="utf-8") as f:
+                    comp_data = json.load(f)
+                    participating = comp_data.get("quote_ids", [])
+                    if supp_id_clean in participating:
+                        references.append(f"Comparison '{comp_data.get('comparison_id', comp_file.stem)}'")
+            except Exception:
+                continue
+
+    # 3. Check Awards
+    if AWARDS_DIR.exists():
+        for award_file in AWARDS_DIR.glob("*.json"):
+            try:
+                with open(award_file, "r", encoding="utf-8") as f:
+                    award_data = json.load(f)
+                    for alloc in award_data.get("allocations", []):
+                        for split in alloc.get("splits", []):
+                            if split.get("supplier_id") == supp_id_clean or split.get("quote_id") == supp_id_clean:
+                                references.append(f"Award Allocation '{award_data.get('rfq_id', award_file.stem)}'")
+                                break
+            except Exception:
+                continue
+
+    return {
+        "is_referenced": len(references) > 0,
+        "references": references,
+        "reference_count": len(references)
+    }
+
+
+def update_supplier_name(supplier_id: str, new_name: str, changed_by: str = "USER") -> Tuple[bool, str, Optional[SupplierMasterRecord]]:
+    """
+    Updates a supplier's display name while preserving immutable supplier_id.
+    Persists audit trail in name_history.
+    Does NOT rewrite historical finalized awards or comparisons.
+    """
+    clean_name = new_name.strip()
+    if not clean_name:
+        return False, "Supplier name cannot be empty.", None
+
+    suppliers = get_supplier_master(include_inactive=True)
+    target = None
+    for s in suppliers:
+        if s.supplier_id == supplier_id:
+            target = s
+            break
+
+    if not target:
+        return False, f"Supplier '{supplier_id}' not found.", None
+
+    if target.supplier_name == clean_name:
+        return True, "Name is unchanged.", target
+
+    old_name = target.supplier_name
+    target.name_history.append(SupplierNameChange(
+        old_name=old_name,
+        new_name=clean_name,
+        changed_at=datetime.utcnow().isoformat(),
+        changed_by=changed_by
+    ))
+    target.supplier_name = clean_name
+    save_supplier_master(suppliers)
+    return True, f"Supplier name updated from '{old_name}' to '{clean_name}'.", target
+
+
+def deactivate_supplier(supplier_id: str) -> Tuple[bool, str]:
+    suppliers = get_supplier_master(include_inactive=True)
+    for s in suppliers:
+        if s.supplier_id == supplier_id:
+            s.status = "INACTIVE"
+            save_supplier_master(suppliers)
+            return True, f"Supplier '{s.supplier_name}' ({supplier_id}) has been deactivated."
+    return False, f"Supplier '{supplier_id}' not found."
+
+
+def restore_supplier(supplier_id: str) -> Tuple[bool, str]:
+    suppliers = get_supplier_master(include_inactive=True)
+    for s in suppliers:
+        if s.supplier_id == supplier_id:
+            s.status = "ACTIVE"
+            save_supplier_master(suppliers)
+            return True, f"Supplier '{s.supplier_name}' ({supplier_id}) restored to Active."
+    return False, f"Supplier '{supplier_id}' not found."
+
+
+def delete_supplier(supplier_id: str) -> Tuple[bool, str]:
+    """Safe hard deletion: blocked if referenced in any historical quote/comparison/award."""
+    deps = check_supplier_dependencies(supplier_id)
+    if deps["is_referenced"]:
+        ref_summary = ", ".join(deps["references"][:3])
+        if len(deps["references"]) > 3:
+            ref_summary += f" (+{len(deps['references'])-3} more)"
+        return False, f"Cannot delete supplier '{supplier_id}': referenced in {deps['reference_count']} procurement record(s) ({ref_summary}). Deactivate the supplier instead."
+
+    suppliers = get_supplier_master(include_inactive=True)
+    new_list = [s for s in suppliers if s.supplier_id != supplier_id]
+    if len(new_list) == len(suppliers):
+        return False, f"Supplier '{supplier_id}' not found."
+    save_supplier_master(new_list)
+    return True, f"Supplier '{supplier_id}' successfully deleted."
 
 
 def parse_catalog_upload(filename: str, content: bytes) -> CatalogExtractionResult:
@@ -335,12 +914,12 @@ def parse_catalog_upload(filename: str, content: bytes) -> CatalogExtractionResu
             )
 
 
-def commit_catalog_import(items_data: List[Dict[str, Any]], mode: str = "append") -> int:
+def commit_catalog_import(items_data: List[Dict[str, Any]], mode: str = "append", filename: str = "Catalog Import") -> Dict[str, Any]:
     """
     Validates and commits a list of parsed preview items into the company Item Master catalog.
     mode can be 'append' (adds to existing) or 'replace' (replaces catalog).
     """
-    existing_items = [] if mode == "replace" else get_item_master()
+    existing_items = [] if mode == "replace" else get_item_master(include_inactive=True)
     
     existing_ids = [it.internal_item_id for it in existing_items if it.internal_item_id.startswith("ITEM-")]
     indices = []
@@ -352,6 +931,9 @@ def commit_catalog_import(items_data: List[Dict[str, Any]], mode: str = "append"
     next_idx = max(indices, default=0) + 1
 
     committed_count = 0
+    new_item_ids = []
+    batch_id = f"IMP-CAT-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
+
     for it in items_data:
         sku = str(it.get("internal_sku", "")).strip().upper()
         desc = str(it.get("canonical_description", "")).strip()
@@ -389,13 +971,24 @@ def commit_catalog_import(items_data: List[Dict[str, Any]], mode: str = "append"
             canonical_description=desc,
             stocking_uom=str(it.get("stocking_uom", "PCS")).strip().upper() or "PCS",
             brand=str(it.get("brand")).strip() if it.get("brand") else "Standard",
-            specifications=specs
+            specifications=specs,
+            status="ACTIVE",
+            import_batch_id=batch_id,
+            created_at=datetime.utcnow().isoformat()
         )
         existing_items.append(rec)
+        new_item_ids.append(item_id)
         committed_count += 1
 
     save_item_master(existing_items)
-    return committed_count
+    if new_item_ids:
+        record_import_batch(
+            batch_id=batch_id,
+            filename=filename,
+            item_ids=new_item_ids,
+            source_type="CATALOG_IMPORT"
+        )
+    return {"committed_count": committed_count, "import_batch_id": batch_id, "new_items_count": len(new_item_ids)}
 
 
 # =========================================================================
@@ -2119,6 +2712,12 @@ def save_award_decision(rfq_id: str, award_data: Dict[str, Any], is_finalized: b
 
             if not bid:
                 val_errors.append(f"Line {line_id} ({item_sku}): Supplier '{supp_id or quote_id}' does not have an eligible, comparable bid in comparison {comp_id}.")
+                continue
+
+            # Safeguard: Inactive supplier cannot receive a new award allocation
+            supp_rec = get_supplier(bid["supplier_id"])
+            if supp_rec and supp_rec.status == "INACTIVE":
+                val_errors.append(f"Line {line_id} ({item_sku}): Supplier '{bid['supplier_name']}' ({bid['supplier_id']}) is INACTIVE in Supplier Master and cannot receive a new award.")
                 continue
 
             authoritative_unit_landed_cost = Decimal(str(bid["unit_landed_cost"]))
