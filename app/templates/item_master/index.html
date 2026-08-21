@@ -260,19 +260,19 @@
                     <td style="text-align: right;" onclick="event.stopPropagation();">
                         <div style="display: flex; justify-content: flex-end; gap: 0.25rem;">
                             {% if item.status == 'INACTIVE' %}
-                            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.15rem 0.4rem;" onclick="restoreItem('{{ item.internal_item_id }}')">
+                            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;" onclick="restoreItem('{{ item.internal_item_id }}')">
                                 Restore
                             </button>
                             {% else %}
-                            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.15rem 0.4rem;" onclick="deactivateItem('{{ item.internal_item_id }}')">
+                            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; color: #f59e0b;" onclick="openDeactivateModal('{{ item.internal_item_id }}', '{{ item.internal_sku|escape }}', '{{ item.canonical_description|escape }}')">
                                 Deactivate
                             </button>
                             {% endif %}
-                            <button type="button" class="btn btn-danger btn-sm" style="font-size: 0.7rem; padding: 0.15rem 0.4rem;" onclick="deleteItem('{{ item.internal_item_id }}', '{{ item.internal_sku }}')">
-                                ✕
+                            <button type="button" class="btn btn-danger btn-sm" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;" onclick="openDeleteModal('{{ item.internal_item_id }}', '{{ item.internal_sku|escape }}', '{{ item.canonical_description|escape }}')">
+                                Delete
                             </button>
-                            <a href="/item-master/{{ item.internal_item_id }}" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.15rem 0.4rem;">
-                                &rarr;
+                            <a href="/item-master/{{ item.internal_item_id }}" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                                Inspect &rarr;
                             </a>
                         </div>
                     </td>
@@ -280,6 +280,82 @@
                 {% endfor %}
             </tbody>
         </table>
+    </div>
+</div>
+
+<!-- Deactivate Item Confirmation Modal -->
+<div id="deactivateItemModal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 99990; display: none; align-items: center; justify-content: center;">
+    <div style="background: var(--bg-card); border: 1px solid rgba(245,158,11,0.5); border-radius: 14px; padding: 2rem; max-width: 500px; width: 90%; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+            <div style="width: 42px; height: 42px; border-radius: 50%; background: rgba(245,158,11,0.15); color: #f59e0b; display: flex; align-items: center; justify-content: center; font-size: 1.3rem;">
+                ⏸
+            </div>
+            <div>
+                <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--text-main); margin: 0;">Deactivate Item?</h3>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem;">Item Master Lifecycle Governance</div>
+            </div>
+        </div>
+
+        <div style="background: var(--bg-card-subtle); border-radius: 8px; padding: 1rem; margin-bottom: 1.25rem; border: 1px solid var(--border-color);">
+            <div style="margin-bottom: 0.5rem;">
+                <span style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Internal SKU:</span>
+                <div style="font-weight: 700; color: var(--accent); font-family: monospace; font-size: 0.9375rem;" id="deact-modal-sku">SKU-...</div>
+            </div>
+            <div>
+                <span style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Product Description:</span>
+                <div style="font-size: 0.8125rem; color: var(--text-main); font-weight: 500;" id="deact-modal-desc">Description...</div>
+            </div>
+        </div>
+
+        <div style="font-size: 0.8125rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.5rem;">
+            This item will become <strong style="color: #f59e0b;">INACTIVE</strong> and will no longer be available for new RFQs or automatic matching.<br><br>
+            Historical RFQs, comparisons, and awards remain unchanged.
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="closeDeactivateModal()">Cancel</button>
+            <button type="button" class="btn btn-primary btn-sm" id="confirmDeactBtn" style="background: #d97706; border-color: #d97706; color: #fff;" onclick="executeDeactivateItem()">
+                Deactivate Item
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Permanent Delete Item Confirmation Modal -->
+<div id="deleteItemModal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 99990; display: none; align-items: center; justify-content: center;">
+    <div style="background: var(--bg-card); border: 1px solid var(--danger-border); border-radius: 14px; padding: 2rem; max-width: 500px; width: 90%; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+            <div style="width: 42px; height: 42px; border-radius: 50%; background: var(--danger-subtle); color: var(--danger); display: flex; align-items: center; justify-content: center; font-size: 1.3rem;">
+                🗑
+            </div>
+            <div>
+                <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--danger); margin: 0;">Permanently Delete Item?</h3>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem;">Safe Hard Delete with Dependency Protection</div>
+            </div>
+        </div>
+
+        <div style="background: var(--bg-card-subtle); border-radius: 8px; padding: 1rem; margin-bottom: 1.25rem; border: 1px solid var(--border-color);">
+            <div style="margin-bottom: 0.5rem;">
+                <span style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Internal SKU:</span>
+                <div style="font-weight: 700; color: var(--accent); font-family: monospace; font-size: 0.9375rem;" id="del-modal-sku">SKU-...</div>
+            </div>
+            <div>
+                <span style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Product Description:</span>
+                <div style="font-size: 0.8125rem; color: var(--text-main); font-weight: 500;" id="del-modal-desc">Description...</div>
+            </div>
+        </div>
+
+        <div style="font-size: 0.8125rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.5rem;">
+            This permanently removes the Item Master record if it has never been referenced by any RFQ, quote, comparison, award, or procurement export.<br><br>
+            <span style="color: var(--danger);">If historical references exist, deletion will be rejected and the item must be deactivated instead.</span>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="closeDeleteModal()">Cancel</button>
+            <button type="button" class="btn btn-danger btn-sm" id="confirmDeleteBtn" onclick="executeDeleteItem()">
+                Delete Permanently
+            </button>
+        </div>
     </div>
 </div>
 
@@ -469,17 +545,75 @@
         }
     }
 
-    async function deactivateItem(itemId) {
+    let currentDeactItemId = null;
+    let currentDelItemId = null;
+
+    function openDeactivateModal(itemId, sku, desc) {
+        currentDeactItemId = itemId;
+        document.getElementById('deact-modal-sku').innerText = sku;
+        document.getElementById('deact-modal-desc').innerText = desc || '—';
+        document.getElementById('deactivateItemModal').style.display = 'flex';
+    }
+
+    function closeDeactivateModal() {
+        document.getElementById('deactivateItemModal').style.display = 'none';
+        currentDeactItemId = null;
+    }
+
+    async function executeDeactivateItem() {
+        if (!currentDeactItemId) return;
+        const btn = document.getElementById('confirmDeactBtn');
+        btn.disabled = true;
+        btn.innerText = 'Deactivating...';
         try {
-            const res = await fetch(`/api/item-master/${itemId}/deactivate`, { method: 'POST' });
+            const res = await fetch(`/api/item-master/${currentDeactItemId}/deactivate`, { method: 'POST' });
             const data = await res.json();
             if (res.ok) {
                 location.reload();
             } else {
                 alert(data.message || 'Failed to deactivate item.');
+                btn.disabled = false;
+                btn.innerText = 'Deactivate Item';
             }
         } catch (e) {
             alert('Error: ' + e.message);
+            btn.disabled = false;
+            btn.innerText = 'Deactivate Item';
+        }
+    }
+
+    function openDeleteModal(itemId, sku, desc) {
+        currentDelItemId = itemId;
+        document.getElementById('del-modal-sku').innerText = sku;
+        document.getElementById('del-modal-desc').innerText = desc || '—';
+        document.getElementById('deleteItemModal').style.display = 'flex';
+    }
+
+    function closeDeleteModal() {
+        document.getElementById('deleteItemModal').style.display = 'none';
+        currentDelItemId = null;
+    }
+
+    async function executeDeleteItem() {
+        if (!currentDelItemId) return;
+        const btn = document.getElementById('confirmDeleteBtn');
+        btn.disabled = true;
+        btn.innerText = 'Deleting...';
+        try {
+            const res = await fetch(`/api/item-master/${currentDelItemId}/delete`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                location.reload();
+            } else {
+                alert(data.message || 'Cannot delete item: referenced in historical procurement records.');
+                btn.disabled = false;
+                btn.innerText = 'Delete Permanently';
+                closeDeleteModal();
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+            btn.disabled = false;
+            btn.innerText = 'Delete Permanently';
         }
     }
 
@@ -491,23 +625,6 @@
                 location.reload();
             } else {
                 alert(data.message || 'Failed to restore item.');
-            }
-        } catch (e) {
-            alert('Error: ' + e.message);
-        }
-    }
-
-    async function deleteItem(itemId, sku) {
-        if (!confirm(`Are you sure you want to permanently delete item ${sku} (${itemId})? If it is referenced in any RFQs, comparisons, or awards, deletion will be safely rejected.`)) {
-            return;
-        }
-        try {
-            const res = await fetch(`/api/item-master/${itemId}/delete`, { method: 'POST' });
-            const data = await res.json();
-            if (res.ok) {
-                location.reload();
-            } else {
-                alert(data.message || 'Cannot delete item: referenced in historical procurement records.');
             }
         } catch (e) {
             alert('Error: ' + e.message);

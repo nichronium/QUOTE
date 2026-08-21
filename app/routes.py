@@ -156,9 +156,6 @@ async def upload_quote_to_rfq(request: Request, rfq_id: str):
 # =========================================================================
 # 2. CANONICAL ITEM MASTER CATALOG (COMPANY PRODUCT DATABASE)
 # =========================================================================
-# =========================================================================
-# 2. CANONICAL ITEM MASTER CATALOG (COMPANY PRODUCT DATABASE)
-# =========================================================================
 @router.get("/item-master", response_class=HTMLResponse)
 async def item_master_page(request: Request):
     items = services.get_item_master(include_inactive=True)
