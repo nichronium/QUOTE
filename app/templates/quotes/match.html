@@ -191,7 +191,7 @@
                                 <option value="{{ cand.candidate_sku }}">{{ cand.candidate_sku }} ({{ "%.0f"|format(cand.match_score * 100) }}%)</option>
                                 {% endfor %}
                             </select>
-                            <button type="submit" name="action" value="ACCEPT" class="btn btn-primary btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                            <button type="submit" name="action_" value="ACCEPT" class="btn btn-primary btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
                                 Confirm
                             </button>
                         </form>
@@ -204,7 +204,7 @@
                                 <option value="{{ prod.internal_sku }}">{{ prod.internal_sku }}</option>
                                 {% endfor %}
                             </select>
-                            <button type="submit" name="action" value="MANUAL_OVERRIDE" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                            <button type="submit" name="action_" value="MANUAL_OVERRIDE" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
                                 Map
                             </button>
                         </form>
@@ -245,7 +245,7 @@
 
             const formData = new FormData(form);
             if (e.submitter && e.submitter.value) {
-                formData.set('action', e.submitter.value);
+                formData.set('action_', e.submitter.value);
             }
 
             try {
