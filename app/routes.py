@@ -573,9 +573,9 @@ async def resolve_match_route(
     quote_id: str,
     line_index: int = Form(...),
     chosen_candidate_sku: Optional[str] = Form(None),
-    action: str = Form("ACCEPT")
+    action_: str = Form("ACCEPT")
 ):
-    services.resolve_match_candidate(quote_id, line_index, chosen_candidate_sku, action)
+    services.resolve_match_candidate(quote_id, line_index, chosen_candidate_sku, action_)
     accept_header = request.headers.get("accept", "")
     if "application/json" in accept_header:
         return JSONResponse(content={
