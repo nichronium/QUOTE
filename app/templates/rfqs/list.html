@@ -25,142 +25,359 @@
     </div>
 </div>
 
-<!-- Lifecycle Status Filter Tabs -->
-<div class="card" style="padding: 0.75rem 1rem; margin-bottom: 1.25rem;">
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
-        <div style="display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
-            <a href="/rfqs?status=all" class="btn btn-sm {% if status_filter == 'all' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size: 0.75rem;">
-                All ({{ total_count }})
-            </a>
-            <a href="/rfqs?status=active" class="btn btn-sm {% if status_filter == 'active' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size: 0.75rem;">
-                Active ({{ active_count }})
-            </a>
-            <a href="/rfqs?status=closed" class="btn btn-sm {% if status_filter == 'closed' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size: 0.75rem;">
-                Closed ({{ closed_count }})
-            </a>
-            <a href="/rfqs?status=cancelled" class="btn btn-sm {% if status_filter == 'cancelled' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size: 0.75rem;">
-                Cancelled ({{ cancelled_count }})
-            </a>
-            <a href="/rfqs?status=archived" class="btn btn-sm {% if status_filter == 'archived' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size: 0.75rem;">
-                Archived ({{ archived_count }})
-            </a>
+{% if rfqs %}
+<!-- Search & Lifecycle Filter Bar -->
+<div class="card" style="padding: 1rem; margin-bottom: 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.85rem;">
+        <!-- Real-Time Search Bar -->
+        <div style="flex: 1; min-width: 280px; position: relative;">
+            <div style="position: absolute; left: 0.85rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; font-size: 0.95rem;">
+                🔍
+            </div>
+            <input 
+                type="text" 
+                id="rfq-search" 
+                placeholder="Search RFQs by reference or title..." 
+                oninput="onRfqSearchInput(this.value)"
+                onkeydown="onRfqSearchKey(event)"
+                style="width: 100%; margin: 0; padding-left: 2.35rem; padding-right: 2.2rem; font-size: 0.875rem; height: 38px; background: var(--bg-card-subtle); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-main);"
+                autocomplete="off"
+            >
+            <button 
+                type="button" 
+                id="rfq-search-clear" 
+                onclick="clearRfqSearch()" 
+                style="position: absolute; right: 0.65rem; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; display: none; font-size: 0.85rem; padding: 0.2rem 0.4rem; border-radius: 4px;"
+                title="Clear search"
+            >
+                ✕
+            </button>
         </div>
-        <div style="font-size: 0.75rem; color: var(--text-muted);">
-            Displaying: <strong>{{ rfqs|length }}</strong> of {{ total_count }} records
+
+        <!-- Lifecycle Status Filter Tabs -->
+        <div style="display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;" id="lifecycle-filter-tabs">
+            <button type="button" onclick="setLifecycleFilter('all')" class="btn btn-sm btn-primary rfq-lifecycle-btn" data-filter="all" style="font-size: 0.75rem;">
+                All (<span class="count-all">{{ total_count }}</span>)
+            </button>
+            <button type="button" onclick="setLifecycleFilter('active')" class="btn btn-sm btn-secondary rfq-lifecycle-btn" data-filter="active" style="font-size: 0.75rem;">
+                Active (<span class="count-active">{{ active_count }}</span>)
+            </button>
+            <button type="button" onclick="setLifecycleFilter('closed')" class="btn btn-sm btn-secondary rfq-lifecycle-btn" data-filter="closed" style="font-size: 0.75rem;">
+                Closed (<span class="count-closed">{{ closed_count }}</span>)
+            </button>
+            <button type="button" onclick="setLifecycleFilter('cancelled')" class="btn btn-sm btn-secondary rfq-lifecycle-btn" data-filter="cancelled" style="font-size: 0.75rem;">
+                Cancelled (<span class="count-cancelled">{{ cancelled_count }}</span>)
+            </button>
+            <button type="button" onclick="setLifecycleFilter('archived')" class="btn btn-sm btn-secondary rfq-lifecycle-btn" data-filter="archived" style="font-size: 0.75rem;">
+                Archived (<span class="count-archived">{{ archived_count }}</span>)
+            </button>
         </div>
+    </div>
+
+    <!-- Active Filter Summary & Reset -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem; padding-top: 0.65rem; border-top: 1px solid rgba(255,255,255,0.06); font-size: 0.75rem; color: var(--text-muted);">
+        <div>
+            Displaying: <strong id="rfq-displayed-count" style="color: var(--text-main);">{{ rfqs|length }}</strong> of {{ total_count }} records
+            <span id="active-filter-indicator" style="display: none; margin-left: 0.5rem;">
+                (Filtered by <strong id="active-filter-label">Active</strong>)
+            </span>
+        </div>
+        <button type="button" id="rfq-reset-btn" onclick="resetRfqSearchAndFilter()" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; display: none;">
+            Reset Filters
+        </button>
     </div>
 </div>
 
-{% if rfqs %}
-<div class="card" style="border-top: 3px solid var(--accent);">
+<!-- Main RFQs Table Container -->
+<div class="card" id="rfqs-table-card" style="border-top: 3px solid var(--accent);">
     <div class="card-header">
         <div class="card-title">
-            Procurement Rounds ({{ rfqs|length }})
+            Procurement Rounds (<span id="rfqs-table-count">{{ rfqs|length }}</span>)
         </div>
     </div>
 
-    <table>
-        <thead>
-            <tr>
-                <th>RFQ Reference</th>
-                <th>Procurement Title</th>
-                <th>Base Currency</th>
-                <th>Requested Scope</th>
-                <th>Supplier Quotes</th>
-                <th>Lifecycle / Stage</th>
-                <th style="text-align: right;">Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for r in rfqs %}
-            <tr>
-                <td>
-                    <code style="color: var(--accent); font-weight: 700; font-size: 0.8125rem;">{{ r.rfq_id }}</code>
-                    {% if r.is_demo %}
-                    <span class="badge badge-purple" style="font-size: 0.65rem; margin-left: 0.25rem;">Demo</span>
-                    {% endif %}
-                </td>
-                <td>
-                    <div style="font-weight: 700; font-size: 0.875rem; color: var(--text-main);">{{ r.title }}</div>
-                    {% if r.created_at %}
-                    <div style="font-size: 0.7rem; color: var(--text-muted);">Created: {{ r.created_at[:16].replace('T', ' ') }}</div>
-                    {% endif %}
-                </td>
-                <td>
-                    <span class="badge badge-info">{{ r.base_currency }}</span>
-                </td>
-                <td>
-                    <span style="font-weight: 600;">{{ r.line_item_count }} Items</span>
-                </td>
-                <td>
-                    <span style="font-weight: 600; font-family: var(--font-mono);">{{ r.quote_count }} Received</span>
-                    {% if r.ready_quote_count > 0 %}
-                    <span style="font-size: 0.75rem; color: var(--success);">({{ r.ready_quote_count }} ready)</span>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if r.lifecycle_status == 'ARCHIVED' %}
-                        <span class="badge badge-muted" style="background: rgba(148,163,184,0.2); color: #64748b;">Archived</span>
-                    {% elif r.lifecycle_status == 'CANCELLED' %}
-                        <span class="badge badge-danger">Cancelled</span>
-                    {% elif r.lifecycle_status == 'CLOSED' or r.status == 'AWARD_FINALIZED' %}
-                        <span class="badge badge-success">Award Finalized</span>
-                    {% elif r.status == 'EVALUATED' %}
-                        <span class="badge badge-success">Evaluated</span>
-                    {% elif r.status == 'READY_FOR_COMPARISON' %}
-                        <span class="badge badge-success">Ready to Compare</span>
-                    {% elif r.status == 'MATCHING_REVIEW' %}
-                        <span class="badge badge-warning">Review Required</span>
-                    {% elif r.status == 'QUOTES_PENDING' %}
-                        <span class="badge badge-info">Quotes Ingesting</span>
-                    {% else %}
-                        <span class="badge badge-muted">Draft</span>
-                    {% endif %}
-                </td>
-                <td style="text-align: right;">
-                    <div style="display: flex; justify-content: flex-end; gap: 0.35rem; align-items: center;">
-                        <a href="/rfqs/{{ r.rfq_id }}" class="btn btn-primary btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.55rem;">
-                            Open &rarr;
-                        </a>
-                        {% if r.lifecycle_status in ['ARCHIVED', 'CANCELLED'] %}
-                        <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.2rem 0.45rem;" onclick="restoreRfq('{{ r.rfq_id }}')">
-                            Restore
-                        </button>
+    <div style="overflow-x: auto;">
+        <table id="rfqs-table">
+            <thead>
+                <tr>
+                    <th style="min-width: 260px;">Procurement Event &amp; RFQ Reference</th>
+                    <th>Scope &amp; Currency</th>
+                    <th>Supplier Quotations</th>
+                    <th>Lifecycle / Stage</th>
+                    <th style="text-align: right; min-width: 140px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in rfqs %}
+                <tr 
+                    class="rfq-row" 
+                    data-rfq-id="{{ r.rfq_id|lower }}"
+                    data-title="{{ r.title|lower }}"
+                    data-lifecycle="{{ r.lifecycle_status|lower }}"
+                    data-status="{{ r.status|lower }}"
+                    data-currency="{{ r.base_currency|lower }}"
+                >
+                    <td>
+                        <div style="font-weight: 700; font-size: 0.9375rem; color: var(--text-main); margin-bottom: 0.2rem;">
+                            {{ r.title }}
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                            <code style="color: var(--accent); font-weight: 700; font-size: 0.75rem; background: rgba(59,130,246,0.1); padding: 0.1rem 0.35rem; border-radius: 4px;">{{ r.rfq_id }}</code>
+                            {% if r.is_demo %}
+                            <span class="badge badge-purple" style="font-size: 0.65rem;">Demo</span>
+                            {% endif %}
+                            {% if r.created_at %}
+                            <span style="font-size: 0.7rem; color: var(--text-muted);">Created: {{ r.created_at[:10] }}</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <span style="font-weight: 600; color: var(--text-main); font-size: 0.8125rem;">{{ r.line_item_count }} Items</span>
+                            <span class="badge badge-info" style="font-size: 0.6875rem;">{{ r.base_currency }}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div style="font-weight: 700; font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-main);">
+                            {{ r.quote_count }} Received
+                        </div>
+                        {% if r.ready_quote_count > 0 %}
+                        <div style="font-size: 0.7rem; color: var(--success); font-weight: 500;">
+                            {{ r.ready_quote_count }} ready for comparison
+                        </div>
                         {% else %}
-                        <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.2rem 0.45rem;" onclick="archiveRfq('{{ r.rfq_id }}')">
-                            Archive
-                        </button>
-                        <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.2rem 0.45rem; color: #ef4444;" onclick="cancelRfq('{{ r.rfq_id }}')">
-                            Cancel
-                        </button>
+                        <div style="font-size: 0.7rem; color: var(--text-muted);">
+                            0 ready
+                        </div>
                         {% endif %}
-                    </div>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+                    </td>
+                    <td>
+                        {% if r.lifecycle_status == 'ARCHIVED' %}
+                            <span class="badge badge-muted" style="background: rgba(148,163,184,0.2); color: #64748b;">Archived</span>
+                        {% elif r.lifecycle_status == 'CANCELLED' %}
+                            <span class="badge badge-danger">Cancelled</span>
+                        {% elif r.lifecycle_status == 'CLOSED' or r.status == 'AWARD_FINALIZED' %}
+                            <span class="badge badge-success">Award Finalized</span>
+                        {% elif r.status == 'EVALUATED' %}
+                            <span class="badge badge-success">Evaluated</span>
+                        {% elif r.status == 'READY_FOR_COMPARISON' %}
+                            <span class="badge badge-success">Ready to Compare</span>
+                        {% elif r.status == 'MATCHING_REVIEW' %}
+                            <span class="badge badge-warning">Review Required</span>
+                        {% elif r.status == 'QUOTES_PENDING' %}
+                            <span class="badge badge-info">Quotes Ingesting</span>
+                        {% else %}
+                            <span class="badge badge-muted">Draft</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: right;">
+                        <div style="display: flex; justify-content: flex-end; gap: 0.35rem; align-items: center;">
+                            <a href="/rfqs/{{ r.rfq_id }}" class="btn btn-primary btn-sm" style="font-size: 0.75rem; padding: 0.25rem 0.65rem;">
+                                Open &rarr;
+                            </a>
+                            {% if r.lifecycle_status in ['ARCHIVED', 'CANCELLED'] %}
+                            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;" onclick="restoreRfq('{{ r.rfq_id }}')">
+                                Restore
+                            </button>
+                            {% else %}
+                            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;" onclick="archiveRfq('{{ r.rfq_id }}')">
+                                Archive
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.25rem 0.5rem; color: #ef4444;" onclick="cancelRfq('{{ r.rfq_id }}')">
+                                Cancel
+                            </button>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
+
+<!-- Search / Filter No Matches Found Empty State -->
+<div id="rfq-no-matches-card" class="card" style="display: none; text-align: center; padding: 3.5rem 1.5rem; border-top: 3px solid var(--accent);">
+    <div style="font-size: 2rem; margin-bottom: 0.5rem;">🔍</div>
+    <h2 style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.5rem;">
+        No RFQs Match Your Search
+    </h2>
+    <p style="font-size: 0.8125rem; color: var(--text-muted); max-width: 480px; margin: 0 auto 1.25rem auto; line-height: 1.6;">
+        No procurement records match query <strong id="rfq-no-match-query" style="color: var(--text-main);"></strong> under the selected lifecycle filter.
+    </p>
+    <div style="display: flex; justify-content: center; gap: 0.75rem;">
+        <button type="button" onclick="resetRfqSearchAndFilter()" class="btn btn-secondary btn-sm">
+            Clear Search &amp; Filters
+        </button>
+        <a href="/rfqs/create" class="btn btn-primary btn-sm">
+            + Create New RFQ
+        </a>
+    </div>
+</div>
+
 {% else %}
+<!-- Clean Zero-State: No RFQs exist anywhere -->
 <div class="card" style="text-align: center; padding: 4rem 1.5rem; border-top: 3px solid var(--accent);">
+    <div style="font-size: 2.2rem; margin-bottom: 0.75rem;">📋</div>
     <h2 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.5rem;">
-        No RFQs Found for this Filter
+        No Procurement Rounds Yet
     </h2>
     <p style="font-size: 0.875rem; color: var(--text-muted); max-width: 520px; margin: 0 auto 1.5rem auto; line-height: 1.6;">
-        No procurement records match the current lifecycle filter. Switch filter or create a new procurement RFQ.
+        Create your first Request for Quotation (RFQ) to define items, ingest supplier quotes, and generate explainable award decisions.
     </p>
     <div style="display: flex; justify-content: center; gap: 1rem;">
-        <a href="/rfqs?status=all" class="btn btn-secondary" style="padding: 0.5rem 1.2rem; font-size: 0.8125rem;">
-            View All RFQs
-        </a>
-        <a href="/rfqs/create" class="btn btn-primary" style="padding: 0.5rem 1.2rem; font-size: 0.8125rem;">
-            + Create New RFQ
+        <a href="/rfqs/create" class="btn btn-primary" style="padding: 0.5rem 1.3rem; font-size: 0.875rem;">
+            + Create RFQ
         </a>
     </div>
 </div>
 {% endif %}
 
 <script>
+let currentLifecycleFilter = 'all';
+let currentSearchQuery = '';
+
+function onRfqSearchInput(query) {
+    currentSearchQuery = (query || '').trim().toLowerCase();
+    const clearBtn = document.getElementById('rfq-search-clear');
+    if (clearBtn) {
+        clearBtn.style.display = currentSearchQuery ? 'block' : 'none';
+    }
+    applyRfqFilters();
+}
+
+function onRfqSearchKey(event) {
+    if (event.key === 'Escape') {
+        clearRfqSearch();
+    }
+}
+
+function clearRfqSearch() {
+    const input = document.getElementById('rfq-search');
+    if (input) {
+        input.value = '';
+    }
+    onRfqSearchInput('');
+}
+
+function setLifecycleFilter(filter) {
+    currentLifecycleFilter = (filter || 'all').toLowerCase();
+    
+    // Update button visual active states
+    document.querySelectorAll('.rfq-lifecycle-btn').forEach(btn => {
+        if (btn.getAttribute('data-filter') === currentLifecycleFilter) {
+            btn.classList.remove('btn-secondary');
+            btn.classList.add('btn-primary');
+        } else {
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-secondary');
+        }
+    });
+
+    applyRfqFilters();
+}
+
+function applyRfqFilters() {
+    const rows = document.querySelectorAll('.rfq-row');
+    if (!rows.length) return;
+
+    let visibleCount = 0;
+    const query = currentSearchQuery;
+    const lifecycle = currentLifecycleFilter;
+
+    rows.forEach(row => {
+        const rfqId = row.getAttribute('data-rfq-id') || '';
+        const title = row.getAttribute('data-title') || '';
+        const rowLifecycle = row.getAttribute('data-lifecycle') || '';
+        const status = row.getAttribute('data-status') || '';
+        const currency = row.getAttribute('data-currency') || '';
+
+        // Check Lifecycle Filter
+        let passesLifecycle = false;
+        if (lifecycle === 'all') {
+            passesLifecycle = true;
+        } else if (lifecycle === 'active') {
+            passesLifecycle = !['archived', 'cancelled', 'closed'].includes(rowLifecycle);
+        } else if (lifecycle === 'closed') {
+            passesLifecycle = (rowLifecycle === 'closed' || status === 'award_finalized');
+        } else if (lifecycle === 'cancelled') {
+            passesLifecycle = (rowLifecycle === 'cancelled');
+        } else if (lifecycle === 'archived') {
+            passesLifecycle = (rowLifecycle === 'archived');
+        }
+
+        // Check Search Query
+        let passesSearch = true;
+        if (query) {
+            passesSearch = (
+                rfqId.includes(query) ||
+                title.includes(query) ||
+                status.includes(query) ||
+                currency.includes(query)
+            );
+        }
+
+        if (passesLifecycle && passesSearch) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    // Update Counter elements
+    const displayedCountEl = document.getElementById('rfq-displayed-count');
+    const tableCountEl = document.getElementById('rfqs-table-count');
+    if (displayedCountEl) displayedCountEl.innerText = visibleCount;
+    if (tableCountEl) tableCountEl.innerText = visibleCount;
+
+    // Show/Hide Table vs No-Matches Card
+    const tableCard = document.getElementById('rfqs-table-card');
+    const noMatchesCard = document.getElementById('rfq-no-matches-card');
+    const noMatchQuery = document.getElementById('rfq-no-match-query');
+    const resetBtn = document.getElementById('rfq-reset-btn');
+    const activeFilterIndicator = document.getElementById('active-filter-indicator');
+    const activeFilterLabel = document.getElementById('active-filter-label');
+
+    if (visibleCount === 0) {
+        if (tableCard) tableCard.style.display = 'none';
+        if (noMatchesCard) noMatchesCard.style.display = 'block';
+        if (noMatchQuery) {
+            noMatchQuery.innerText = query ? `"${query}"` : `status "${lifecycle}"`;
+        }
+    } else {
+        if (tableCard) tableCard.style.display = 'block';
+        if (noMatchesCard) noMatchesCard.style.display = 'none';
+    }
+
+    // Toggle Reset Button
+    const isFiltered = (lifecycle !== 'all' || query.length > 0);
+    if (resetBtn) resetBtn.style.display = isFiltered ? 'inline-block' : 'none';
+    if (activeFilterIndicator) {
+        activeFilterIndicator.style.display = (lifecycle !== 'all') ? 'inline' : 'none';
+        if (activeFilterLabel) {
+            activeFilterLabel.innerText = lifecycle.charAt(0).toUpperCase() + lifecycle.slice(1);
+        }
+    }
+}
+
+function resetRfqSearchAndFilter() {
+    clearRfqSearch();
+    setLifecycleFilter('all');
+}
+
+// Keyboard shortcut '/' to focus search
+document.addEventListener('keydown', function(e) {
+    if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        const searchInput = document.getElementById('rfq-search');
+        if (searchInput) {
+            searchInput.focus();
+            searchInput.select();
+        }
+    }
+});
+
 async function archiveRfq(rfqId) {
     if (!confirm(`Archive RFQ '${rfqId}'? The RFQ and all historical quotations, comparisons, and awards remain permanently preserved on disk.`)) {
         return;

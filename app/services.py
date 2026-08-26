@@ -10,7 +10,7 @@ Coordinates domain engines across:
 """
 
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 import json
 import os
 from pathlib import Path
@@ -39,6 +39,8 @@ from extraction.extractor import QuoteExtractor
 from extraction.catalog_extractor import CatalogExtractor, CatalogExtractionResult
 from matching.matcher import ItemMatcher
 from matching.models import (
+    DecisionBand,
+    EvidenceItem,
     ItemMasterRecord,
     ItemStatus,
     MatchCandidate,
@@ -46,6 +48,7 @@ from matching.models import (
     MatchMethod,
     MatchStatus,
     RFQLineItem,
+    SupplierMappingRecord,
     SupplierMasterRecord,
     SupplierNameChange,
     ImportBatchRecord,
@@ -58,6 +61,7 @@ from parsers.pdf_parser import PDFParser
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "test_runs"
 RFQS_DIR = DATA_DIR / "rfqs"
+SUPPLIER_MAPPINGS_FILE = DATA_DIR / "supplier_mappings.json"
 COMPARISONS_DIR = DATA_DIR / "comparisons"
 ITEM_MASTER_DIR = DATA_DIR / "item_master"
 AWARDS_DIR = DATA_DIR / "awards"
@@ -78,11 +82,8 @@ DEMO_SUPPLIER_IDS = ["BENCH-SUPP-A", "BENCH-SUPP-B", "BENCH-SUPP-C", "BENCH-SUPP
 # =========================================================================
 
 def ensure_default_rfqs():
-    """Seeds the benchmark RFQ into the system if none exists."""
-    default_rfq = get_benchmark_rfq()
-    rfq_file = RFQS_DIR / f"{default_rfq.rfq_id}.json"
-    if not rfq_file.exists():
-        save_rfq_document(default_rfq)
+    """Initializes RFQ storage directory."""
+    RFQS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def save_rfq_document(rfq: RFQDocument, allow_overwrite: bool = True) -> RFQDocument:
@@ -279,7 +280,14 @@ def delete_rfq_safe(rfq_id: str) -> Tuple[bool, str]:
     return True, f"RFQ '{rfq_id}' has been safely ARCHIVED."
 
 
-def create_rfq(rfq_id: str, title: str, base_currency: str, items: List[Dict[str, Any]]) -> RFQDocument:
+def create_rfq(
+    rfq_id: str,
+    title: str,
+    base_currency: str,
+    items: List[Dict[str, Any]],
+    source: str = "USER",
+    is_test: bool = False
+) -> RFQDocument:
     # 1. Auto-register any new items into company Item Master so catalog stays unified and supplier quotes match seamlessly
     current_im = get_item_master(include_inactive=True)
     existing_skus = {im.internal_sku.upper().strip() for im in current_im if im.internal_sku}
@@ -369,6 +377,8 @@ def create_rfq(rfq_id: str, title: str, base_currency: str, items: List[Dict[str
         title=title.strip(),
         base_currency=base_currency.strip().upper() or "INR",
         status="OPEN",
+        source=source,
+        is_test=is_test,
         created_at=now_iso,
         updated_at=now_iso,
         items=rfq_items
@@ -377,12 +387,12 @@ def create_rfq(rfq_id: str, title: str, base_currency: str, items: List[Dict[str
 
 
 def ensure_item_master_initialized():
-    """Seeds canonical Item Master into catalog.json if it doesn't exist."""
+    """Initializes canonical Item Master catalog.json as empty if it doesn't exist."""
+    ITEM_MASTER_DIR.mkdir(parents=True, exist_ok=True)
     catalog_file = ITEM_MASTER_DIR / "catalog.json"
     if not catalog_file.exists():
-        benchmark_items = get_benchmark_item_master()
         with open(catalog_file, "w", encoding="utf-8") as f:
-            json.dump([item.model_dump(mode="json") for item in benchmark_items], f, indent=2)
+            json.dump([], f, indent=2)
 
 
 ensure_item_master_initialized()
@@ -401,10 +411,7 @@ def get_item_master(include_inactive: bool = False) -> List[ItemMasterRecord]:
                 return records
             return [r for r in records if r.status != "INACTIVE"]
     except Exception:
-        bench = get_benchmark_item_master()
-        if include_inactive:
-            return bench
-        return [r for r in bench if r.status != "INACTIVE"]
+        return []
 
 
 def save_item_master(items: List[ItemMasterRecord]):
@@ -1590,9 +1597,73 @@ def compute_quotes_matching_fingerprint(quote_ids: List[str]) -> str:
     return h.hexdigest()
 
 
+def get_supplier_mappings() -> List[SupplierMappingRecord]:
+    """Retrieves all persisted supplier-to-item confirmed memory mappings."""
+    if not SUPPLIER_MAPPINGS_FILE.exists():
+        return []
+    try:
+        with open(SUPPLIER_MAPPINGS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return [SupplierMappingRecord.model_validate(d) for d in data]
+    except Exception:
+        return []
+
+
+def save_supplier_mapping(
+    supplier_id: str,
+    supplier_part_number: str,
+    internal_sku: str,
+    supplier_name: Optional[str] = None,
+    internal_item_id: Optional[str] = None,
+    canonical_description: Optional[str] = None,
+    confirmed_by: str = "Procurement Specialist",
+    source_rfq_id: Optional[str] = None,
+    source_quote_id: Optional[str] = None
+) -> SupplierMappingRecord:
+    """Persists a human-confirmed supplier part number to internal SKU relationship."""
+    SUPPLIER_MAPPINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    mappings = get_supplier_mappings()
+    now_iso = datetime.utcnow().isoformat()
+    norm_supp = str(supplier_id).upper().strip()
+    norm_pn = str(supplier_part_number).upper().strip()
+
+    # Remove existing mapping for this supplier + part number if already present
+    filtered = [m for m in mappings if not (m.supplier_id.upper().strip() == norm_supp and m.supplier_part_number.upper().strip() == norm_pn)]
+
+    record = SupplierMappingRecord(
+        supplier_id=supplier_id.strip(),
+        supplier_name=supplier_name.strip() if supplier_name else None,
+        supplier_part_number=supplier_part_number.strip(),
+        internal_sku=internal_sku.strip(),
+        internal_item_id=internal_item_id,
+        canonical_description=canonical_description,
+        confirmed_by=confirmed_by,
+        confirmed_at=now_iso,
+        source_rfq_id=source_rfq_id,
+        source_quote_id=source_quote_id
+    )
+    filtered.append(record)
+
+    tmp_file = SUPPLIER_MAPPINGS_FILE.parent / f"supplier_mappings.tmp.{uuid.uuid4().hex[:8]}"
+    with open(tmp_file, "w", encoding="utf-8") as f:
+        json.dump([m.model_dump(mode="json") for m in filtered], f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_file, SUPPLIER_MAPPINGS_FILE)
+    return record
+
+
+def lookup_supplier_mapping(supplier_id: str, supplier_part_number: str) -> Optional[SupplierMappingRecord]:
+    """Looks up a known supplier part number mapping for the given supplier."""
+    mappings = get_supplier_mappings()
+    norm_supp = str(supplier_id).upper().strip()
+    norm_pn = str(supplier_part_number).upper().strip()
+    return next((m for m in mappings if m.supplier_id.upper().strip() == norm_supp and m.supplier_part_number.upper().strip() == norm_pn), None)
+
+
 def run_matching_for_quote(quote_id: str, rfq_id: Optional[str] = None) -> List[MatchedQuoteItem]:
     """
-    Runs multi-signal item matching for a quote while strictly preserving locked human decisions.
+    Runs multi-signal universal item matching for a quote while strictly preserving locked human decisions.
     Invariant: A manual procurement reviewer decision MUST NEVER be silently overwritten by an automatic matching run.
     """
     quote = get_canonical_quote(quote_id)
@@ -1624,17 +1695,33 @@ def run_matching_for_quote(quote_id: str, rfq_id: Optional[str] = None) -> List[
                             match_method=MatchMethod.FUZZY_DESCRIPTION_MULTI_SIGNAL,
                             match_score=1.0,
                             match_status=MatchStatus.EXACT_MATCH,
+                            decision_band=DecisionBand.HIGH_CONFIDENCE,
                             explanations=["Confirmed by procurement reviewer"],
+                            evidence_checklist=[EvidenceItem(signal="HUMAN_CONFIRMATION", status="PASS", description="Confirmed by procurement reviewer")],
                             matched_fields=["human_confirmation"],
                             source_provenance=em.quote_item.provenance
                         )
                         break
             human_resolved_by_line[em.quote_item.line_index] = em
 
-    # 2. Run automated matching on all quote items
+    # 2. Run automated matching on all quote items with supplier mappings memory
     item_master = get_item_master()
     matcher = ItemMatcher()
-    fresh_matches = matcher.match_quote(quote, item_master, rfq.items if rfq else None)
+    supp_mappings = get_supplier_mappings()
+    meta = get_quote_metadata(quote_id) or {}
+    supplier_id = (
+        meta.get("supplier_id")
+        or getattr(quote, "supplier_matched_id", None)
+        or getattr(quote, "supplier_raw_name", None)
+        or quote_id
+    )
+    fresh_matches = matcher.match_quote(
+        quote,
+        item_master,
+        rfq.items if rfq else None,
+        supplier_id=supplier_id,
+        supplier_mappings=supp_mappings
+    )
 
     # 3. Merge: NEVER replace a human-resolved line with a newly calculated automatic match!
     final_matches: List[MatchedQuoteItem] = []
@@ -1675,6 +1762,13 @@ def get_matched_items(quote_id: str) -> Optional[List[MatchedQuoteItem]]:
         return None
 
 
+def save_quote_matched_items(quote_id: str, matched_items: List[MatchedQuoteItem]) -> None:
+    quote_dir = DATA_DIR / quote_id
+    (quote_dir / "matching").mkdir(parents=True, exist_ok=True)
+    with open(quote_dir / "matching" / "matched_items.json", "w", encoding="utf-8") as f:
+        f.write(json.dumps([m.model_dump(mode="json") for m in matched_items], indent=2))
+
+
 def resolve_match_candidate(quote_id: str, line_index: int, chosen_candidate_sku: Optional[str], action: str = "ACCEPT") -> List[MatchedQuoteItem]:
     matched_items = get_matched_items(quote_id)
     if not matched_items:
@@ -1684,20 +1778,57 @@ def resolve_match_candidate(quote_id: str, line_index: int, chosen_candidate_sku
     if not target:
         raise ValueError(f"Matched item with line index {line_index} not found.")
 
+    quote = get_canonical_quote(quote_id)
+    meta = get_quote_metadata(quote_id) or {}
+    rfq_id = meta.get("rfq_id")
+    rfq = get_rfq(rfq_id) if rfq_id else None
+
     if action in ["MARK_UNMATCHED", "REJECT"]:
         target.match_status = MatchStatus.UNMATCHED
+        target.decision_band = DecisionBand.LOW_CONFIDENCE
         target.rfq_match = None
         target.item_master_match = None
+        target.has_hard_conflict = False
+        target.conflict_reasons = []
         target.review_reasons = ["Marked as unmatched / non-catalog by procurement reviewer"]
+        target.evidence_checklist = [EvidenceItem(signal="HUMAN_DECISION", status="INFO", description="Marked as unmatched by buyer")]
     elif action in ["CLEAR", "RESET", "REOPEN"]:
         target.match_status = MatchStatus.REVIEW_REQUIRED
+        target.decision_band = DecisionBand.MANUAL_REVIEW
         target.rfq_match = None
         target.item_master_match = None
+        target.has_hard_conflict = False
+        target.conflict_reasons = []
         target.review_reasons = ["Match reopened by procurement reviewer for re-evaluation"]
     elif action in ["ACCEPT", "CHOOSE", "MANUAL_OVERRIDE"]:
         if chosen_candidate_sku:
-            item_master = get_item_master()
+            item_master = get_item_master(include_inactive=True)
             master_rec = next((im for im in item_master if im.internal_sku.upper().strip() == chosen_candidate_sku.upper().strip()), None)
+            if not master_rec and rfq and rfq.items:
+                rline = next((rl for rl in rfq.items if (rl.sku and rl.sku.upper() == chosen_candidate_sku.upper()) or (rl.rfq_line_id and rl.rfq_line_id.upper() == chosen_candidate_sku.upper())), None)
+                if rline:
+                    master_rec = ItemMasterRecord(
+                        internal_item_id=rline.internal_item_id or rline.rfq_line_id,
+                        internal_sku=rline.sku or rline.rfq_line_id,
+                        category=rline.category,
+                        manufacturer=rline.manufacturer,
+                        manufacturer_part_number=rline.manufacturer_part_number,
+                        canonical_description=rline.description,
+                        stocking_uom=rline.requested_uom or target.quote_item.quoted_uom or "PCS",
+                        specifications=rline.specifications
+                    )
+            if not master_rec:
+                cand_meta = target.item_master_match if (target.item_master_match and target.item_master_match.candidate_sku and target.item_master_match.candidate_sku.upper() == chosen_candidate_sku.upper()) else None
+                if not cand_meta and target.top_candidates:
+                    cand_meta = next((c for c in target.top_candidates if c.candidate_sku and c.candidate_sku.upper() == chosen_candidate_sku.upper()), None)
+                if cand_meta:
+                    master_rec = ItemMasterRecord(
+                        internal_item_id=cand_meta.candidate_item_id or chosen_candidate_sku,
+                        internal_sku=cand_meta.candidate_sku or chosen_candidate_sku,
+                        canonical_description=cand_meta.candidate_description or chosen_candidate_sku,
+                        stocking_uom=target.quote_item.quoted_uom or "PCS"
+                    )
+
             if master_rec:
                 cand = MatchCandidate(
                     candidate_item_id=master_rec.internal_item_id,
@@ -1706,14 +1837,20 @@ def resolve_match_candidate(quote_id: str, line_index: int, chosen_candidate_sku
                     match_method=MatchMethod.FUZZY_DESCRIPTION_MULTI_SIGNAL,
                     match_score=1.0,
                     match_status=MatchStatus.EXACT_MATCH,
+                    decision_band=DecisionBand.HIGH_CONFIDENCE,
                     explanations=["Confirmed by procurement reviewer"],
+                    evidence_checklist=[EvidenceItem(signal="HUMAN_CONFIRMATION", status="PASS", description="Confirmed by procurement reviewer")],
                     matched_fields=["human_confirmation"],
+                    has_hard_conflict=False,
+                    conflict_reasons=[],
                     source_provenance=target.quote_item.provenance
                 )
                 target.item_master_match = cand
+                target.decision_band = DecisionBand.HIGH_CONFIDENCE
+                target.has_hard_conflict = False
+                target.conflict_reasons = []
                 
                 # Check UOM compatibility deterministically
-                uom_res = target.uom_conversion
                 from matching.uom_resolver import UOMResolver
                 uom_resolver = UOMResolver()
                 uom_res = uom_resolver.resolve_uom_conversion(
@@ -1725,14 +1862,14 @@ def resolve_match_candidate(quote_id: str, line_index: int, chosen_candidate_sku
                 
                 if not uom_res.is_compatible:
                     target.match_status = MatchStatus.UOM_INCOMPATIBLE
+                    target.has_hard_conflict = True
+                    target.decision_band = DecisionBand.BLOCKED_CONFLICT
+                    target.conflict_reasons = [uom_res.error_reason or "Incompatible UOM conversion"]
                     target.review_reasons = [uom_res.error_reason or "Incompatible UOM conversion"]
                 else:
                     target.match_status = MatchStatus.EXACT_MATCH
                     target.review_reasons = []
 
-                meta = get_quote_metadata(quote_id) or {}
-                rfq_id = meta.get("rfq_id")
-                rfq = get_rfq(rfq_id) if rfq_id else None
                 if rfq:
                     for rline in rfq.items:
                         if (rline.sku and rline.sku.upper() == master_rec.internal_sku.upper()) or (rline.internal_item_id == master_rec.internal_item_id):
@@ -1743,11 +1880,29 @@ def resolve_match_candidate(quote_id: str, line_index: int, chosen_candidate_sku
                                 match_method=MatchMethod.FUZZY_DESCRIPTION_MULTI_SIGNAL,
                                 match_score=1.0,
                                 match_status=MatchStatus.EXACT_MATCH,
+                                decision_band=DecisionBand.HIGH_CONFIDENCE,
                                 explanations=["Confirmed by procurement reviewer"],
+                                evidence_checklist=[EvidenceItem(signal="HUMAN_CONFIRMATION", status="PASS", description="Confirmed by procurement reviewer")],
                                 matched_fields=["human_confirmation"],
+                                has_hard_conflict=False,
+                                conflict_reasons=[],
                                 source_provenance=target.quote_item.provenance
                             )
                             break
+
+                # Save to persistent supplier memory if supplier part number exists
+                supp_id = meta.get("supplier_id") or (quote.supplier_raw_name if quote else None) or quote_id
+                if supp_id and target.quote_item.supplier_part_number:
+                    save_supplier_mapping(
+                        supplier_id=supp_id,
+                        supplier_name=quote.supplier_raw_name if quote else meta.get("supplier_name"),
+                        supplier_part_number=target.quote_item.supplier_part_number,
+                        internal_sku=master_rec.internal_sku,
+                        internal_item_id=master_rec.internal_item_id,
+                        canonical_description=master_rec.canonical_description,
+                        source_rfq_id=rfq_id,
+                        source_quote_id=quote_id
+                    )
 
     quote_dir = DATA_DIR / quote_id
     with open(quote_dir / "matching" / "matched_items.json", "w", encoding="utf-8") as f:
@@ -1760,6 +1915,355 @@ def resolve_match_candidate(quote_id: str, line_index: int, chosen_candidate_sku
         json.dump(meta, f, indent=2)
 
     return matched_items
+
+
+def bulk_confirm_matches(quote_id: str, line_indices: List[int]) -> Dict[str, Any]:
+    """Bulk-confirms human approved matches for the specified line indices atomically."""
+    matched_items = get_matched_items(quote_id)
+    if not matched_items:
+        raise ValueError(f"No matched items found for quote {quote_id}.")
+
+    quote = get_canonical_quote(quote_id)
+    meta = get_quote_metadata(quote_id) or {}
+    rfq_id = meta.get("rfq_id")
+    rfq = get_rfq(rfq_id) if rfq_id else None
+    item_master = get_item_master()
+    master_by_sku = {im.internal_sku.upper().strip(): im for im in item_master}
+
+    from matching.uom_resolver import UOMResolver
+    uom_resolver = UOMResolver()
+
+    supp_id = meta.get("supplier_id") or (quote.supplier_raw_name if quote else None) or quote_id
+    confirmed_count = 0
+    indices_set = set(line_indices)
+
+    for item in matched_items:
+        if item.quote_item.line_index in indices_set:
+            if item.item_master_match and not item.has_hard_conflict:
+                cand_sku = item.item_master_match.candidate_sku
+                master_rec = master_by_sku.get(cand_sku.upper().strip())
+                if master_rec:
+                    item.item_master_match.match_status = MatchStatus.EXACT_MATCH
+                    item.item_master_match.decision_band = DecisionBand.HIGH_CONFIDENCE
+                    item.item_master_match.explanations = ["Confirmed by procurement reviewer in bulk batch"]
+                    item.item_master_match.evidence_checklist = [
+                        EvidenceItem(signal="HUMAN_CONFIRMATION", status="PASS", description="Bulk-confirmed by buyer")
+                    ]
+                    item.item_master_match.has_hard_conflict = False
+                    item.item_master_match.conflict_reasons = []
+
+                    item.match_status = MatchStatus.EXACT_MATCH
+                    item.decision_band = DecisionBand.HIGH_CONFIDENCE
+                    item.has_hard_conflict = False
+                    item.conflict_reasons = []
+                    item.review_reasons = []
+
+                    # Check UOM compatibility deterministically
+                    uom_res = uom_resolver.resolve_uom_conversion(
+                        source_uom=item.quote_item.quoted_uom,
+                        target_uom=master_rec.stocking_uom or item.quote_item.quoted_uom,
+                        quoted_quantity=item.quote_item.quoted_qty
+                    )
+                    item.uom_conversion = uom_res
+                    if not uom_res.is_compatible:
+                        item.match_status = MatchStatus.UOM_INCOMPATIBLE
+                        item.has_hard_conflict = True
+                        item.decision_band = DecisionBand.BLOCKED_CONFLICT
+                        item.conflict_reasons = [uom_res.error_reason or "Incompatible UOM conversion"]
+                    else:
+                        if rfq:
+                            for rline in rfq.items:
+                                if (rline.sku and rline.sku.upper() == master_rec.internal_sku.upper()) or (rline.internal_item_id == master_rec.internal_item_id):
+                                    item.rfq_match = MatchCandidate(
+                                        candidate_item_id=rline.rfq_line_id,
+                                        candidate_sku=rline.sku or rline.rfq_line_id,
+                                        candidate_description=rline.description,
+                                        match_method=MatchMethod.FUZZY_DESCRIPTION_MULTI_SIGNAL,
+                                        match_score=1.0,
+                                        match_status=MatchStatus.EXACT_MATCH,
+                                        decision_band=DecisionBand.HIGH_CONFIDENCE,
+                                        explanations=["Bulk-confirmed by procurement reviewer"],
+                                        evidence_checklist=[EvidenceItem(signal="HUMAN_CONFIRMATION", status="PASS", description="Bulk-confirmed by buyer")],
+                                        matched_fields=["human_confirmation"],
+                                        has_hard_conflict=False,
+                                        conflict_reasons=[],
+                                        source_provenance=item.quote_item.provenance
+                                    )
+                                    break
+
+                        # Save to supplier memory if part number exists
+                        if supp_id and item.quote_item.supplier_part_number:
+                            save_supplier_mapping(
+                                supplier_id=supp_id,
+                                supplier_part_number=item.quote_item.supplier_part_number,
+                                internal_sku=master_rec.internal_sku,
+                                supplier_name=quote.supplier_raw_name if quote else None,
+                                internal_item_id=master_rec.internal_item_id,
+                                canonical_description=master_rec.canonical_description,
+                                confirmed_by="Procurement Specialist (Bulk)",
+                                source_rfq_id=rfq_id,
+                                source_quote_id=quote_id
+                            )
+                        confirmed_count += 1
+
+    save_quote_matched_items(quote_id, matched_items)
+
+    return {
+        "status": "success",
+        "confirmed_count": confirmed_count,
+        "message": f"Successfully bulk-confirmed {confirmed_count} proposed matches."
+    }
+
+
+def resolve_grouped_matches(quote_id: str, group_key: str, chosen_candidate_sku: str) -> Dict[str, Any]:
+    """Resolves all supplier quote lines matching the group key with a single decision atomically."""
+    matched_items = get_matched_items(quote_id)
+    if not matched_items:
+        raise ValueError(f"No matched items found for quote {quote_id}.")
+
+    quote = get_canonical_quote(quote_id)
+    meta = get_quote_metadata(quote_id) or {}
+    rfq_id = meta.get("rfq_id")
+    rfq = get_rfq(rfq_id) if rfq_id else None
+    item_master = get_item_master()
+    master_rec = next((im for im in item_master if im.internal_sku.upper().strip() == chosen_candidate_sku.upper().strip()), None)
+
+    from matching.uom_resolver import UOMResolver
+    uom_resolver = UOMResolver()
+
+    supp_id = meta.get("supplier_id") or (quote.supplier_raw_name if quote else None) or quote_id
+    resolved_count = 0
+
+    for item in matched_items:
+        desc_norm = item.quote_item.raw_description.strip().lower()
+        cand_sku = (item.item_master_match.candidate_sku if item.item_master_match else "").lower()
+        item_group_key = f"{desc_norm}::{cand_sku}"
+
+        if item_group_key == group_key.lower() or desc_norm == group_key.lower():
+            if master_rec:
+                cand = MatchCandidate(
+                    candidate_item_id=master_rec.internal_item_id,
+                    candidate_sku=master_rec.internal_sku,
+                    candidate_description=master_rec.canonical_description,
+                    match_method=MatchMethod.FUZZY_DESCRIPTION_MULTI_SIGNAL,
+                    match_score=1.0,
+                    match_status=MatchStatus.EXACT_MATCH,
+                    decision_band=DecisionBand.HIGH_CONFIDENCE,
+                    explanations=["Confirmed by procurement reviewer via group decision"],
+                    evidence_checklist=[EvidenceItem(signal="HUMAN_CONFIRMATION", status="PASS", description="Group-confirmed by buyer")],
+                    matched_fields=["human_confirmation", "grouped_decision"],
+                    has_hard_conflict=False,
+                    conflict_reasons=[],
+                    source_provenance=item.quote_item.provenance
+                )
+                item.item_master_match = cand
+                item.decision_band = DecisionBand.HIGH_CONFIDENCE
+                item.has_hard_conflict = False
+                item.conflict_reasons = []
+
+                uom_res = uom_resolver.resolve_uom_conversion(
+                    source_uom=item.quote_item.quoted_uom,
+                    target_uom=master_rec.stocking_uom or item.quote_item.quoted_uom,
+                    quoted_quantity=item.quote_item.quoted_qty
+                )
+                item.uom_conversion = uom_res
+                if not uom_res.is_compatible:
+                    item.match_status = MatchStatus.UOM_INCOMPATIBLE
+                    item.has_hard_conflict = True
+                    item.decision_band = DecisionBand.BLOCKED_CONFLICT
+                    item.conflict_reasons = [uom_res.error_reason or "Incompatible UOM conversion"]
+                    item.review_reasons = [uom_res.error_reason or "Incompatible UOM conversion"]
+                else:
+                    item.match_status = MatchStatus.EXACT_MATCH
+                    item.review_reasons = []
+
+                    if rfq:
+                        for rline in rfq.items:
+                            if (rline.sku and rline.sku.upper() == master_rec.internal_sku.upper()) or (rline.internal_item_id == master_rec.internal_item_id):
+                                item.rfq_match = MatchCandidate(
+                                    candidate_item_id=rline.rfq_line_id,
+                                    candidate_sku=rline.sku or rline.rfq_line_id,
+                                    candidate_description=rline.description,
+                                    match_method=MatchMethod.FUZZY_DESCRIPTION_MULTI_SIGNAL,
+                                    match_score=1.0,
+                                    match_status=MatchStatus.EXACT_MATCH,
+                                    decision_band=DecisionBand.HIGH_CONFIDENCE,
+                                    explanations=["Confirmed by procurement reviewer via group decision"],
+                                    evidence_checklist=[EvidenceItem(signal="HUMAN_CONFIRMATION", status="PASS", description="Group-confirmed by buyer")],
+                                    matched_fields=["human_confirmation", "grouped_decision"],
+                                    has_hard_conflict=False,
+                                    conflict_reasons=[],
+                                    source_provenance=item.quote_item.provenance
+                                )
+                                break
+
+                    if supp_id and item.quote_item.supplier_part_number:
+                        save_supplier_mapping(
+                            supplier_id=supp_id,
+                            supplier_part_number=item.quote_item.supplier_part_number,
+                            internal_sku=master_rec.internal_sku,
+                            supplier_name=quote.supplier_raw_name if quote else None,
+                            internal_item_id=master_rec.internal_item_id,
+                            canonical_description=master_rec.canonical_description,
+                            confirmed_by="Procurement Specialist (Group)",
+                            source_rfq_id=rfq_id,
+                            source_quote_id=quote_id
+                        )
+                resolved_count += 1
+
+    save_quote_matched_items(quote_id, matched_items)
+
+    return {
+        "status": "success",
+        "resolved_count": resolved_count,
+        "message": f"Resolved {resolved_count} occurrences in group."
+    }
+
+
+def classify_matched_item_review_state(m: MatchedQuoteItem) -> str:
+    """
+    Authoritative single source of truth for mutually exclusive review state classification:
+    - 'BLOCKED_CONFLICT': Hard conflict on MPN/Specs/UOM, explicit human override required.
+    - 'HIGH_CONFIDENCE': >=95% confidence, zero hard conflicts, or explicitly confirmed by human.
+    - 'BULK_CANDIDATE': 80-94% confidence, eligible for system-generated 1-click batch confirmation.
+    - 'MANUAL_REVIEW': 50-79% confidence, guided continuous review queue.
+    - 'LOW_CONFIDENCE': <50% confidence, non-catalog/unmatched exceptions.
+    """
+    if m.has_hard_conflict or m.decision_band == DecisionBand.BLOCKED_CONFLICT or m.match_status == MatchStatus.UOM_INCOMPATIBLE:
+        return "BLOCKED_CONFLICT"
+    elif is_human_resolved_match(m) or (m.match_status in [MatchStatus.EXACT_MATCH, MatchStatus.HIGH_CONFIDENCE_MATCH] and m.decision_band == DecisionBand.HIGH_CONFIDENCE):
+        return "HIGH_CONFIDENCE"
+    elif m.decision_band == DecisionBand.BULK_CANDIDATE:
+        return "BULK_CANDIDATE"
+    elif m.decision_band == DecisionBand.MANUAL_REVIEW or m.match_status == MatchStatus.REVIEW_REQUIRED:
+        return "MANUAL_REVIEW"
+    else:
+        return "LOW_CONFIDENCE"
+
+
+def get_quote_matching_workbench_data(quote_id: str) -> Dict[str, Any]:
+    """Builds comprehensive decision-band workbench data for quotation alignment UI."""
+    matched_items = get_matched_items(quote_id) or []
+    quote = get_canonical_quote(quote_id)
+    meta = get_quote_metadata(quote_id) or {}
+    rfq = get_rfq(meta.get("rfq_id")) if meta.get("rfq_id") else None
+
+    # Authoritative Decision Band Buckets
+    auto_resolved = []
+    bulk_candidates = []
+    manual_review = []
+    low_confidence = []
+    blocked_conflicts = []
+
+    for m in matched_items:
+        st = classify_matched_item_review_state(m)
+        if st == "BLOCKED_CONFLICT":
+            blocked_conflicts.append(m)
+        elif st == "HIGH_CONFIDENCE":
+            auto_resolved.append(m)
+        elif st == "BULK_CANDIDATE":
+            bulk_candidates.append(m)
+        elif st == "MANUAL_REVIEW":
+            manual_review.append(m)
+        else:
+            low_confidence.append(m)
+
+    # Auto-Batch Bulk Candidates by proposed candidate SKU & supplier mapping pattern
+    bulk_batches_map: Dict[str, Dict[str, Any]] = {}
+    for m in bulk_candidates:
+        if m.item_master_match:
+            sku = m.item_master_match.candidate_sku
+            pn = m.quote_item.supplier_part_number or ""
+            supp_name = quote.supplier_raw_name if quote else "Supplier"
+            batch_key = sku.upper()
+            if batch_key not in bulk_batches_map:
+                bulk_batches_map[batch_key] = {
+                    "batch_id": f"batch-{abs(hash(batch_key)) % 100000}",
+                    "batch_key": batch_key,
+                    "proposed_sku": sku,
+                    "proposed_description": m.item_master_match.candidate_description or sku,
+                    "supplier_name": supp_name,
+                    "supplier_pn": pn,
+                    "min_confidence": int(round(m.item_master_match.match_score * 100)),
+                    "max_confidence": int(round(m.item_master_match.match_score * 100)),
+                    "stocking_uom": (m.uom_conversion.target_uom if m.uom_conversion else None) or m.quote_item.quoted_uom or "PCS",
+                    "items": [],
+                    "batch_items": [],
+                    "line_specs": [],
+                    "line_indices": []
+                }
+            score_pct = int(round(m.item_master_match.match_score * 100))
+            b = bulk_batches_map[batch_key]
+            b["min_confidence"] = min(b["min_confidence"], score_pct)
+            b["max_confidence"] = max(b["max_confidence"], score_pct)
+            b["items"].append(m)
+            b["batch_items"].append(m)
+            b["line_indices"].append(m.quote_item.line_index)
+            b["line_specs"].append({
+                "quote_id": quote_id,
+                "line_index": m.quote_item.line_index,
+                "chosen_candidate_sku": sku
+            })
+
+    bulk_batches = list(bulk_batches_map.values())
+    for idx, b in enumerate(bulk_batches):
+        b["batch_index"] = idx + 1
+        b["count"] = len(b["items"])
+        b["line_specs_json"] = json.dumps(b["line_specs"])
+        if b["min_confidence"] == b["max_confidence"]:
+            b["confidence_display"] = f"{b['min_confidence']}%"
+        else:
+            b["confidence_display"] = f"{b['min_confidence']}–{b['max_confidence']}%"
+
+    # Grouped Proposed Mappings
+    grouped_map: Dict[str, Dict[str, Any]] = {}
+    for m in bulk_candidates + manual_review:
+        if m.item_master_match:
+            desc_norm = m.quote_item.raw_description.strip()
+            proposed_sku = m.item_master_match.candidate_sku
+            key = f"{desc_norm.lower()}::{proposed_sku.lower()}"
+            if key not in grouped_map:
+                grouped_map[key] = {
+                    "group_key": key,
+                    "description": desc_norm,
+                    "proposed_sku": proposed_sku,
+                    "proposed_description": m.item_master_match.candidate_description,
+                    "confidence_pct": int(round(m.item_master_match.match_score * 100)),
+                    "decision_band": m.decision_band,
+                    "evidence_checklist": m.evidence_checklist,
+                    "line_indices": [],
+                    "count": 0
+                }
+            grouped_map[key]["line_indices"].append(m.quote_item.line_index)
+            grouped_map[key]["count"] += 1
+
+    grouped_candidates = [g for g in grouped_map.values() if g["count"] > 1]
+    unresolved_count = len(bulk_candidates) + len(manual_review) + len(blocked_conflicts)
+
+    return {
+        "quote": quote,
+        "quote_id": quote_id,
+        "rfq": rfq,
+        "total_lines": len(matched_items),
+        "matched_items": matched_items,
+        "auto_resolved": auto_resolved,
+        "bulk_candidates": bulk_candidates,
+        "bulk_batches": bulk_batches,
+        "manual_review": manual_review,
+        "low_confidence": low_confidence,
+        "blocked_conflicts": blocked_conflicts,
+        "grouped_candidates": grouped_candidates,
+        "summary_counts": {
+            "total": len(matched_items),
+            "auto_resolved": len(auto_resolved),
+            "bulk_candidates": len(bulk_candidates),
+            "manual_review": len(manual_review),
+            "low_confidence": len(low_confidence),
+            "blocked_conflicts": len(blocked_conflicts),
+            "unresolved_count": unresolved_count,
+            "bulk_batch_count": len(bulk_batches)
+        }
+    }
 
 
 # =========================================================================
@@ -1836,21 +2340,48 @@ def get_quotes_for_rfq(rfq_id: str, all_quotes: Optional[List[Dict[str, Any]]] =
             lines_extracted_count = len(matched)
             
             matched_rfq_line_ids = set()
-            review_rfq_line_ids = set()
             matched_quote_indices = set()
+            
+            q_auto_resolved = 0
+            q_bulk_ready = 0
+            q_manual_review = 0
+            q_blocked = 0
+            q_unmatched = 0
+            q_outside_scope = 0
 
-            for rfq_line in rfq_items:
-                for m in matched:
+            for m in matched:
+                st = classify_matched_item_review_state(m)
+                if st == "BLOCKED_CONFLICT":
+                    q_blocked += 1
+                elif st == "HIGH_CONFIDENCE":
+                    q_auto_resolved += 1
+                elif st == "BULK_CANDIDATE":
+                    q_bulk_ready += 1
+                elif st == "MANUAL_REVIEW":
+                    q_manual_review += 1
+                else:
+                    q_unmatched += 1
+
+                # Check if item corresponds to an RFQ line
+                is_rfq_scoped = False
+                for rfq_line in rfq_items:
                     if is_quote_item_matching_rfq_line(m, rfq_line):
                         matched_rfq_line_ids.add(rfq_line.rfq_line_id)
                         matched_quote_indices.add(m.quote_item.line_index)
+                        is_rfq_scoped = True
+                        break
                     elif is_quote_item_review_for_rfq_line(m, rfq_line):
-                        review_rfq_line_ids.add(rfq_line.rfq_line_id)
+                        is_rfq_scoped = True
+                        break
+                if not is_rfq_scoped:
+                    q_outside_scope += 1
 
             rfq_items_matched = len(matched_rfq_line_ids)
             extra_lines_count = max(0, lines_extracted_count - len(matched_quote_indices))
             unmatched_rfq_items_count = max(0, total_rfq_items - rfq_items_matched)
-            review_count = len(review_rfq_line_ids) or sum(1 for m in matched if m.match_status in [MatchStatus.REVIEW_REQUIRED, MatchStatus.UOM_INCOMPATIBLE])
+            
+            q_unresolved_count = q_bulk_ready + q_manual_review + q_blocked
+            review_count = q_unresolved_count
 
             pct_val, pct_str = format_coverage_pct(rfq_items_matched, total_rfq_items)
 
@@ -1861,13 +2392,19 @@ def get_quotes_for_rfq(rfq_id: str, all_quotes: Optional[List[Dict[str, Any]]] =
             q["unmatched_rfq_items_count"] = unmatched_rfq_items_count
             q["matched_exact"] = rfq_items_matched
             q["review_count"] = review_count
-            q["unmatched_count"] = unmatched_rfq_items_count
+            q["unmatched_count"] = q_unmatched
+            q["outside_scope_count"] = q_outside_scope
+            q["auto_resolved_count"] = q_auto_resolved
+            q["bulk_ready_count"] = q_bulk_ready
+            q["manual_review_count"] = q_manual_review
+            q["blocked_conflicts_count"] = q_blocked
+            q["unresolved_count"] = q_unresolved_count
             q["comparable_items_count"] = rfq_items_matched
             
             q["scope_coverage_pct"] = pct_val
             q["coverage_pct_str"] = pct_str
             q["scope_coverage_str"] = f"{rfq_items_matched} / {total_rfq_items} ({pct_str})"
-            q["scope_breakdown_str"] = f"{lines_extracted_count} supplier lines extracted · {rfq_items_matched} matched to RFQ · {extra_lines_count} unmatched / extra"
+            q["scope_breakdown_str"] = f"{lines_extracted_count} supplier lines extracted · {rfq_items_matched} matched to RFQ · {extra_lines_count} outside scope"
             
             # Processing State Model: Received -> Extracted -> Review Needed -> Ready for Comparison
             is_success = (q.get("status") == "SUCCESS")
@@ -1881,15 +2418,15 @@ def get_quotes_for_rfq(rfq_id: str, all_quotes: Optional[List[Dict[str, Any]]] =
                 q["is_eligible"] = False
             elif review_count > 0:
                 q["processing_status"] = "REVIEW_NEEDED"
-                q["processing_status_label"] = f"Review Needed ({review_count})"
+                q["processing_status_label"] = f"Review Required ({review_count} Pending)"
                 q["processing_status_badge"] = "badge-warning"
                 q["coverage_state"] = "REVIEW_REQUIRED"
                 q["eligibility_status"] = "REVIEW_REQUIRED"
-                q["whole_rfq_status"] = f"Review Needed ({review_count})"
+                q["whole_rfq_status"] = f"Review Required ({review_count} Pending)"
                 q["is_eligible"] = False
             elif rfq_items_matched > 0:
                 q["processing_status"] = "READY_FOR_COMPARISON"
-                q["processing_status_label"] = "Ready for Comparison"
+                q["processing_status_label"] = "Ready for Comparison (0 Pending)"
                 q["processing_status_badge"] = "badge-success"
                 q["eligibility_status"] = "ELIGIBLE"
                 q["is_eligible"] = True
@@ -2116,6 +2653,8 @@ def list_tests() -> List[Dict[str, Any]]:
 
 def list_comparisons() -> List[Dict[str, Any]]:
     comparisons = []
+    if not COMPARISONS_DIR.exists():
+        return []
     for f in sorted(COMPARISONS_DIR.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True):
         try:
             with open(f, "r", encoding="utf-8") as fp:
@@ -2125,12 +2664,35 @@ def list_comparisons() -> List[Dict[str, Any]]:
                 l1_name = l1_supp.get("supplier_name", "Split Optimal") if isinstance(l1_supp, dict) else "Split Optimal"
                 l1_cost = l1_supp.get("total_landed_cost_base", "—") if isinstance(l1_supp, dict) else "—"
                 comp_obj = data.get("comparison") or {}
+
+                rfq_id = data.get("rfq_id")
+                rfq_doc = get_rfq(rfq_id) if rfq_id else None
+                rfq_title = rfq_doc.title if rfq_doc else data.get("title", f"Comparison for {rfq_id}")
+
+                suppliers_dict = comp_obj.get("suppliers") or {}
+                supplier_names = []
+                if isinstance(suppliers_dict, dict):
+                    for sid, sinfo in suppliers_dict.items():
+                        if isinstance(sinfo, dict) and sinfo.get("supplier_name"):
+                            supplier_names.append(sinfo["supplier_name"])
+                        else:
+                            supplier_names.append(str(sid))
+                elif isinstance(suppliers_dict, list):
+                    for sinfo in suppliers_dict:
+                        if isinstance(sinfo, dict) and sinfo.get("supplier_name"):
+                            supplier_names.append(sinfo["supplier_name"])
+                        elif isinstance(sinfo, str):
+                            supplier_names.append(sinfo)
+
                 comparisons.append({
                     "comparison_id": data.get("comparison_id", f.stem),
-                    "rfq_id": data.get("rfq_id"),
-                    "title": data.get("title", f"Comparison for {data.get('rfq_id')}"),
+                    "rfq_id": rfq_id,
+                    "rfq_title": rfq_title,
+                    "title": data.get("title", f"Comparison for {rfq_id}"),
                     "created_at": data.get("created_at"),
-                    "supplier_count": len(comp_obj.get("suppliers", {})),
+                    "supplier_count": len(suppliers_dict),
+                    "supplier_names": supplier_names,
+                    "supplier_names_str": ", ".join(supplier_names) if supplier_names else "—",
                     "l1_supplier": l1_name,
                     "l1_landed_cost": l1_cost,
                     "base_currency": comp_obj.get("base_currency", "INR")
@@ -2275,7 +2837,7 @@ def run_rfq_comparison(
     ranking_engine = RankingEngine()
     ranking_report = ranking_engine.generate_ranking_report(comparison)
 
-    comparison_id = f"COMP-{rfq_id}-{int(time.time())}"
+    comparison_id = f"COMP-{rfq_id}-{int(time.time() * 1000)}"
     alloc_str = charge_allocation_method.value if hasattr(charge_allocation_method, "value") else str(charge_allocation_method)
     
     result_data = {
@@ -2322,7 +2884,9 @@ def get_review_center_issues(rfq_id_filter: Optional[str] = None) -> List[Dict[s
     quotes = [q for q in quotes if q.get("rfq_id") in active_rfq_ids]
 
     for q in quotes:
-        quote_id = q["test_id"]
+        quote_id = q.get("quote_id") or q.get("test_id")
+        if not quote_id:
+            continue
         q_name = q.get("test_name", quote_id)
         supplier = q.get("supplier_name", "Unknown Supplier")
         rfq_id = q.get("rfq_id") or "Unassigned"
@@ -2388,6 +2952,463 @@ def get_review_center_issues(rfq_id_filter: Optional[str] = None) -> List[Dict[s
     return issues
 
 
+def get_review_center_workbench_summary(rfq_id_filter: Optional[str] = None) -> Dict[str, Any]:
+    """Computes high-level aggregated decision-band summary statistics for the Review Center."""
+    if rfq_id_filter:
+        active_rfq_ids = {rfq_id_filter}
+    else:
+        user_rfqs = list_rfqs(include_demo=True)
+        active_rfq_ids = {r["rfq_id"] for r in user_rfqs}
+
+    quotes = list_quotes(include_dev_runs=False, include_demo=True)
+    quotes = [q for q in quotes if q.get("rfq_id") in active_rfq_ids]
+
+    total_supplier_lines = 0
+    high_confidence_count = 0
+    bulk_candidate_count = 0
+    manual_review_count = 0
+    low_confidence_count = 0
+    blocked_conflicts_count = 0
+
+    quote_summaries = []
+
+    for q in quotes:
+        qid = q.get("quote_id") or q.get("test_id")
+        if not qid:
+            continue
+        matched = get_matched_items(qid) or []
+        if not matched:
+            continue
+
+        q_total = len(matched)
+        total_supplier_lines += q_total
+        q_auto = 0
+        q_bulk = 0
+        q_manual = 0
+        q_low = 0
+        q_blocked = 0
+
+        for m in matched:
+            st = classify_matched_item_review_state(m)
+            if st == "BLOCKED_CONFLICT":
+                blocked_conflicts_count += 1
+                q_blocked += 1
+            elif st == "HIGH_CONFIDENCE":
+                high_confidence_count += 1
+                q_auto += 1
+            elif st == "BULK_CANDIDATE":
+                bulk_candidate_count += 1
+                q_bulk += 1
+            elif st == "MANUAL_REVIEW":
+                manual_review_count += 1
+                q_manual += 1
+            else:
+                low_confidence_count += 1
+                q_low += 1
+
+        quote_summaries.append({
+            "quote_id": qid,
+            "quote_name": q.get("test_name", qid),
+            "supplier_name": q.get("supplier_name", "Supplier"),
+            "rfq_id": q.get("rfq_id"),
+            "total_lines": q_total,
+            "auto_resolved": q_auto,
+            "bulk_candidates": q_bulk,
+            "manual_review": q_manual,
+            "low_confidence": q_low,
+            "blocked": q_blocked,
+            "unresolved_count": (q_bulk + q_manual + q_blocked),
+            "has_pending": (q_bulk + q_manual + q_blocked) > 0
+        })
+
+    unresolved_total = bulk_candidate_count + manual_review_count + blocked_conflicts_count
+    return {
+        "total": total_supplier_lines,
+        "total_supplier_lines": total_supplier_lines,
+        "auto_resolved": high_confidence_count,
+        "high_confidence_count": high_confidence_count,
+        "bulk_candidates": bulk_candidate_count,
+        "bulk_candidate_count": bulk_candidate_count,
+        "manual_review": manual_review_count,
+        "manual_review_count": manual_review_count,
+        "low_confidence": low_confidence_count,
+        "low_confidence_count": low_confidence_count,
+        "blocked_conflicts": blocked_conflicts_count,
+        "blocked_conflicts_count": blocked_conflicts_count,
+        "unresolved_count": unresolved_total,
+        "quote_summaries": quote_summaries
+    }
+
+
+def bulk_confirm_rfq_matches(rfq_id: Optional[str], batch_line_specs: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Atomically validates and commits batch confirmations across multiple supplier quotes
+    belonging to an RFQ in a single pass.
+    """
+    if not batch_line_specs:
+        return {"status": "error", "message": "No lines specified for bulk confirmation."}
+
+    # 1. Group specs by quote_id
+    quotes_to_update: Dict[str, List[Dict[str, Any]]] = {}
+    for spec in batch_line_specs:
+        qid = spec.get("quote_id")
+        if not qid:
+            return {"status": "error", "message": "Missing quote_id in batch specification."}
+        if qid not in quotes_to_update:
+            quotes_to_update[qid] = []
+        quotes_to_update[qid].append(spec)
+
+    # 2. Validation Phase across all quotes
+    loaded_quotes: Dict[str, Tuple[List[MatchedQuoteItem], Dict[str, Any]]] = {}
+    im_records = {im.internal_sku.upper(): im for im in get_item_master(include_inactive=True) if im.internal_sku}
+
+    # Aggregate RFQ lines from target RFQ and participating quotes
+    all_rfq_ids_to_check = set()
+    if rfq_id:
+        all_rfq_ids_to_check.add(rfq_id)
+    for qid in quotes_to_update:
+        meta = get_quote_metadata(qid) or {}
+        q_rfq = meta.get("rfq_id")
+        if q_rfq:
+            all_rfq_ids_to_check.add(q_rfq)
+
+    for check_rfq_id in all_rfq_ids_to_check:
+        rfq_obj = get_rfq(check_rfq_id)
+        if rfq_obj and rfq_obj.items:
+            for rline in rfq_obj.items:
+                line_sku = rline.sku or rline.rfq_line_id
+                if line_sku and line_sku.upper() not in im_records:
+                    im_records[line_sku.upper()] = ItemMasterRecord(
+                        internal_item_id=rline.internal_item_id or rline.rfq_line_id,
+                        internal_sku=line_sku,
+                        category=rline.category,
+                        manufacturer=rline.manufacturer,
+                        manufacturer_part_number=rline.manufacturer_part_number,
+                        canonical_description=rline.description,
+                        stocking_uom=rline.requested_uom or "PCS",
+                        specifications=rline.specifications
+                    )
+
+    for qid, specs in quotes_to_update.items():
+        meta = get_quote_metadata(qid) or {}
+        # RFQ isolation check: quote must belong to this RFQ if specified
+        if rfq_id and meta.get("rfq_id") != rfq_id:
+            return {"status": "error", "message": f"Quote '{qid}' does not belong to RFQ '{rfq_id}'."}
+
+        matched_items = get_matched_items(qid)
+        if not matched_items:
+            return {"status": "error", "message": f"Matching items not found for quote '{qid}'."}
+
+        # Validate each spec for this quote
+        for s in specs:
+            l_idx = s.get("line_index")
+            sku = s.get("chosen_candidate_sku")
+            if l_idx is None or l_idx < 0 or l_idx >= len(matched_items):
+                return {"status": "error", "message": f"Invalid line index {l_idx} in quote '{qid}'."}
+
+            item = matched_items[l_idx]
+            # Safety checks: Hard conflicts must NOT be bulk confirmed
+            if item.has_hard_conflict or item.decision_band == DecisionBand.BLOCKED_CONFLICT:
+                return {"status": "error", "message": f"Line {l_idx + 1} in quote '{qid}' has a hard conflict and cannot be bulk confirmed."}
+
+            if not sku:
+                return {"status": "error", "message": f"Missing chosen candidate SKU for line {l_idx + 1} in quote '{qid}'."}
+
+            if sku.upper() not in im_records:
+                # Check candidate metadata on the item
+                cand_meta = item.item_master_match if (item.item_master_match and item.item_master_match.candidate_sku and item.item_master_match.candidate_sku.upper() == sku.upper()) else None
+                if not cand_meta and item.top_candidates:
+                    cand_meta = next((c for c in item.top_candidates if c.candidate_sku and c.candidate_sku.upper() == sku.upper()), None)
+                if cand_meta:
+                    im_records[sku.upper()] = ItemMasterRecord(
+                        internal_item_id=cand_meta.candidate_item_id or sku,
+                        internal_sku=cand_meta.candidate_sku or sku,
+                        canonical_description=cand_meta.candidate_description or sku,
+                        stocking_uom=item.quote_item.quoted_uom or "PCS"
+                    )
+                else:
+                    return {"status": "error", "message": f"Candidate SKU '{sku}' not found in Item Master or RFQ lines."}
+
+        loaded_quotes[qid] = (matched_items, meta)
+
+    # 3. Execution Phase (Atomic Commit)
+    total_confirmed = 0
+    rfq_obj = get_rfq(rfq_id) if rfq_id else None
+
+    from matching.uom_resolver import UOMResolver
+    uom_resolver = UOMResolver()
+
+    for qid, specs in quotes_to_update.items():
+        matched_items, meta = loaded_quotes[qid]
+        quote = get_canonical_quote(qid)
+        supp_id = meta.get("supplier_id") or (quote.supplier_raw_name if quote else None) or qid
+        supp_name = quote.supplier_raw_name if quote else meta.get("supplier_name", "Supplier")
+
+        for s in specs:
+            l_idx = s["line_index"]
+            chosen_sku = s["chosen_candidate_sku"].upper()
+            im_item = im_records[chosen_sku]
+
+            # Promote item to confirmed state
+            item = matched_items[l_idx]
+            item.match_status = MatchStatus.EXACT_MATCH
+            item.decision_band = DecisionBand.HIGH_CONFIDENCE
+            item.has_hard_conflict = False
+            item.review_reasons = []
+            item.conflict_reasons = []
+
+            # Set candidate match
+            item.item_master_match = MatchCandidate(
+                candidate_item_id=im_item.internal_item_id,
+                candidate_sku=im_item.internal_sku,
+                candidate_description=im_item.canonical_description,
+                match_method=MatchMethod.FUZZY_DESCRIPTION_MULTI_SIGNAL,
+                match_score=1.0,
+                match_status=MatchStatus.EXACT_MATCH,
+                decision_band=DecisionBand.HIGH_CONFIDENCE,
+                explanations=["Bulk-confirmed by procurement reviewer"],
+                evidence_checklist=[EvidenceItem(signal="HUMAN_CONFIRMATION", status="PASS", description="Bulk-confirmed by buyer")],
+                matched_fields=["human_confirmation"],
+                has_hard_conflict=False,
+                conflict_reasons=[],
+                source_provenance=item.quote_item.provenance
+            )
+
+            # Check UOM compatibility
+            uom_res = uom_resolver.resolve_uom_conversion(
+                source_uom=item.quote_item.quoted_uom,
+                target_uom=im_item.stocking_uom or item.quote_item.quoted_uom,
+                quoted_quantity=item.quote_item.quoted_qty
+            )
+            item.uom_conversion = uom_res
+
+            # Align with RFQ Line if exists
+            target_rfq_for_quote = get_rfq(meta.get("rfq_id")) or rfq_obj
+            if target_rfq_for_quote:
+                for rline in target_rfq_for_quote.items:
+                    if (rline.sku and rline.sku.upper() == im_item.internal_sku.upper()) or (rline.internal_item_id == im_item.internal_item_id):
+                        item.rfq_match = MatchCandidate(
+                            candidate_item_id=rline.rfq_line_id,
+                            candidate_sku=rline.sku or rline.rfq_line_id,
+                            candidate_description=rline.description,
+                            match_method=MatchMethod.FUZZY_DESCRIPTION_MULTI_SIGNAL,
+                            match_score=1.0,
+                            match_status=MatchStatus.EXACT_MATCH,
+                            decision_band=DecisionBand.HIGH_CONFIDENCE,
+                            explanations=["Bulk-confirmed by procurement reviewer"],
+                            evidence_checklist=[EvidenceItem(signal="HUMAN_CONFIRMATION", status="PASS", description="Bulk-confirmed by buyer")],
+                            matched_fields=["human_confirmation"],
+                            has_hard_conflict=False,
+                            conflict_reasons=[],
+                            source_provenance=item.quote_item.provenance
+                        )
+                        break
+
+            total_confirmed += 1
+
+            # Save supplier memory
+            if supp_id and item.quote_item.supplier_part_number:
+                save_supplier_mapping(
+                    supplier_id=supp_id,
+                    supplier_name=supp_name,
+                    supplier_part_number=item.quote_item.supplier_part_number,
+                    internal_sku=im_item.internal_sku,
+                    internal_item_id=im_item.internal_item_id,
+                    canonical_description=im_item.canonical_description,
+                    confirmed_by="Procurement Specialist (Bulk)",
+                    source_rfq_id=rfq_id,
+                    source_quote_id=qid
+                )
+
+        # Commit quote to disk
+        save_quote_matched_items(qid, matched_items)
+
+    # 4. Advance RFQ workflow stage if all items are resolved
+    for check_rfq_id in all_rfq_ids_to_check:
+        rfq_doc = get_rfq(check_rfq_id)
+        if rfq_doc and rfq_doc.status not in ["ARCHIVED", "CANCELLED", "CLOSED", "AWARD_FINALIZED"]:
+            rfq_summary = get_review_center_workbench_summary(check_rfq_id)
+            if rfq_summary.get("unresolved_count", 0) == 0:
+                rfq_doc.status = "READY_FOR_COMPARISON"
+                save_rfq_document(rfq_doc)
+
+    summary = get_review_center_workbench_summary(rfq_id)
+    return {
+        "status": "success",
+        "confirmed_count": total_confirmed,
+        "summary_counts": summary,
+        "unresolved_count": summary.get("unresolved_count", 0),
+        "message": f"Successfully confirmed {total_confirmed} matches across {len(quotes_to_update)} supplier quotations."
+    }
+
+
+def get_global_review_center_data(rfq_id_filter: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Assembles the complete authoritative RFQ-level Review Center dataset across all suppliers.
+    Constructs system-selected bulk candidate batches, continuous manual review queue,
+    blocked conflicts, and complete line registry.
+    """
+    if rfq_id_filter:
+        active_rfq_ids = {rfq_id_filter}
+        target_rfq = get_rfq(rfq_id_filter)
+    else:
+        user_rfqs = list_rfqs(include_demo=True)
+        active_rfq_ids = {r["rfq_id"] for r in user_rfqs}
+        target_rfq = None
+
+    quotes = list_quotes(include_dev_runs=False, include_demo=True)
+    quotes = [q for q in quotes if q.get("rfq_id") in active_rfq_ids]
+
+    total_supplier_lines = 0
+    auto_resolved = []
+    bulk_candidates = []
+    manual_review = []
+    low_confidence = []
+    blocked_conflicts = []
+    all_registered_items = []
+    suppliers_set = set()
+
+    for q in quotes:
+        qid = q.get("quote_id") or q.get("test_id")
+        if not qid:
+            continue
+        supp_name = q.get("supplier_name", "Supplier")
+        suppliers_set.add(supp_name)
+        curr = q.get("currency", "INR")
+
+        matched = get_matched_items(qid) or []
+        if not matched:
+            continue
+
+        total_supplier_lines += len(matched)
+
+        for m in matched:
+            sku_match = m.item_master_match
+            cand_sku = sku_match.candidate_sku if sku_match else None
+            cand_desc = sku_match.candidate_description if sku_match else None
+            score = float(sku_match.match_score) if sku_match else 0.0
+            score_pct = int(round(score * 100))
+
+            item_dict = {
+                "quote_id": qid,
+                "supplier_name": supp_name,
+                "rfq_id": q.get("rfq_id"),
+                "line_index": m.quote_item.line_index,
+                "line_number": m.quote_item.line_index + 1,
+                "raw_description": m.quote_item.raw_description,
+                "quoted_qty": str(m.quote_item.quoted_qty) if m.quote_item.quoted_qty is not None else "—",
+                "quoted_uom": m.quote_item.quoted_uom or "",
+                "unit_price": str(m.quote_item.unit_price) if m.quote_item.unit_price is not None else "—",
+                "supplier_part_number": m.quote_item.supplier_part_number or "",
+                "currency": curr,
+                "candidate_sku": cand_sku,
+                "proposed_sku": cand_sku,
+                "candidate_description": cand_desc,
+                "proposed_description": cand_desc,
+                "match_score": score,
+                "match_score_pct": score_pct,
+                "confidence_pct": score_pct,
+                "decision_band": m.decision_band.value if hasattr(m.decision_band, "value") else str(m.decision_band),
+                "match_status": m.match_status.value if hasattr(m.match_status, "value") else str(m.match_status),
+                "has_hard_conflict": m.has_hard_conflict,
+                "evidence_checklist": [ev.model_dump() if hasattr(ev, "model_dump") else ev for ev in m.evidence_checklist],
+                "conflict_reasons": m.conflict_reasons,
+                "review_reasons": m.review_reasons,
+                "top_candidates": [c.model_dump() if hasattr(c, "model_dump") else c for c in m.top_candidates],
+                "best_candidate": sku_match.model_dump() if (sku_match and hasattr(sku_match, "model_dump")) else (m.top_candidates[0].model_dump() if m.top_candidates and hasattr(m.top_candidates[0], "model_dump") else None)
+            }
+
+            all_registered_items.append(item_dict)
+
+            st = classify_matched_item_review_state(m)
+            if st == "BLOCKED_CONFLICT":
+                blocked_conflicts.append(item_dict)
+            elif st == "HIGH_CONFIDENCE":
+                auto_resolved.append(item_dict)
+            elif st == "BULK_CANDIDATE":
+                bulk_candidates.append(item_dict)
+            elif st == "MANUAL_REVIEW":
+                manual_review.append(item_dict)
+            else:
+                low_confidence.append(item_dict)
+
+    # Construct System-Generated Bulk Candidate Batches (80-94%)
+    bulk_batches_map: Dict[str, Dict[str, Any]] = {}
+    for it in bulk_candidates:
+        cand_sku = it["candidate_sku"] or "UNKNOWN"
+        batch_key = cand_sku.upper()
+        if batch_key not in bulk_batches_map:
+            bulk_batches_map[batch_key] = {
+                "batch_id": f"batch-{abs(hash(batch_key)) % 100000}",
+                "batch_key": batch_key,
+                "proposed_sku": cand_sku,
+                "proposed_description": it["candidate_description"] or cand_sku,
+                "supplier_names": set(),
+                "min_confidence": it["match_score_pct"],
+                "max_confidence": it["match_score_pct"],
+                "stocking_uom": it["quoted_uom"] or "PCS",
+                "batch_items": [],
+                "items": [],
+                "line_specs": []
+            }
+        b = bulk_batches_map[batch_key]
+        b["supplier_names"].add(it["supplier_name"])
+        b["min_confidence"] = min(b["min_confidence"], it["match_score_pct"])
+        b["max_confidence"] = max(b["max_confidence"], it["match_score_pct"])
+        b["batch_items"].append(it)
+        b["items"].append(it)
+        b["line_specs"].append({
+            "quote_id": it["quote_id"],
+            "line_index": it["line_index"],
+            "chosen_candidate_sku": cand_sku
+        })
+
+    rfq_bulk_batches = list(bulk_batches_map.values())
+    for idx, b in enumerate(rfq_bulk_batches):
+        b["batch_index"] = idx + 1
+        b["count"] = len(b["batch_items"])
+        b["supplier_names_list"] = sorted(list(b["supplier_names"]))
+        b["supplier_count"] = len(b["supplier_names_list"])
+        b["supplier_names_display"] = ", ".join(b["supplier_names_list"])
+        b["line_specs_json"] = json.dumps(b["line_specs"])
+        if b["min_confidence"] == b["max_confidence"]:
+            b["confidence_display"] = f"{b['min_confidence']}%"
+        else:
+            b["confidence_display"] = f"{b['min_confidence']}–{b['max_confidence']}%"
+
+        # Link batch_index & batch_id back to individual items for registry display
+        for it in b["batch_items"]:
+            it["batch_index"] = idx + 1
+            it["batch_id"] = b["batch_id"]
+
+    unresolved_count = len(bulk_candidates) + len(manual_review) + len(blocked_conflicts)
+    summary_counts = {
+        "total": total_supplier_lines,
+        "auto_resolved": len(auto_resolved),
+        "bulk_candidates": len(bulk_candidates),
+        "manual_review": len(manual_review),
+        "blocked_conflicts": len(blocked_conflicts),
+        "low_confidence": len(low_confidence),
+        "unresolved_count": unresolved_count,
+        "bulk_batch_count": len(rfq_bulk_batches)
+    }
+
+    item_master = get_item_master(include_inactive=False)
+
+    return {
+        "rfq": target_rfq,
+        "rfq_id": rfq_id_filter,
+        "summary_counts": summary_counts,
+        "rfq_bulk_batches": rfq_bulk_batches,
+        "manual_review_queue": manual_review,
+        "blocked_conflicts": blocked_conflicts,
+        "all_registered_items": all_registered_items,
+        "suppliers_list": sorted(list(suppliers_set)),
+        "item_master": item_master,
+        "issues": get_review_center_issues(rfq_id_filter)
+    }
+
+
 def get_dashboard_stats() -> Dict[str, Any]:
     rfqs = list_rfqs(include_demo=False)
     quotes = list_quotes(include_dev_runs=False, include_demo=False)
@@ -2411,7 +3432,8 @@ def get_dashboard_stats() -> Dict[str, Any]:
 
 def ensure_demo_workspace_initialized():
     """Seeds and executes the 20-item benchmark showcase."""
-    ensure_default_rfqs()
+    default_rfq = get_benchmark_rfq()
+    save_rfq_document(default_rfq)
     fixtures_dir = DATA_DIR / "benchmark_fixtures"
     fixtures_dir.mkdir(parents=True, exist_ok=True)
     paths = generate_benchmark_workbooks(fixtures_dir)
@@ -2481,9 +3503,7 @@ def ensure_demo_workspace_initialized():
         with open(comp_file, "w", encoding="utf-8") as f:
             json.dump(comp_data, f, indent=2)
 
-
-ensure_demo_workspace_initialized()
-
+# ensure_demo_workspace_initialized() -- disabled auto-seed on module import
 
 def get_demo_workspace_data() -> Dict[str, Any]:
     return get_rfq_workspace_data(DEMO_RFQ_ID)
@@ -2536,18 +3556,39 @@ def get_award_decision(rfq_id: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _generate_fresh_award_proposal(rfq_id: str, comp: Dict[str, Any], scenario: str = "SINGLE_SUPPLIER_L1") -> Dict[str, Any]:
-    ranking_report = comp.get("ranking_report") or {}
+def _generate_fresh_award_proposal(rfq_id: str, comp: Dict[str, Any], scenario: Optional[str] = None, strategy: str = "COST_OPTIMIZED") -> Dict[str, Any]:
+    from sourcing.service import run_sourcing_optimization
+    from sourcing.models import ProcurementStrategy
+
+    rfq = get_rfq(rfq_id)
+    rfq_items_map = {it.rfq_line_id: it for it in (rfq.items if rfq else [])}
+
+    base_cur = comp.get("base_currency", "INR")
+    
+    # 1. Run Sourcing Optimization Engine
+    strat_enum = ProcurementStrategy.COST_OPTIMIZED
+    if strategy and strategy.upper() in ProcurementStrategy.__members__:
+        strat_enum = ProcurementStrategy[strategy.upper()]
+
+    opt_report = run_sourcing_optimization(comp, strategy=strat_enum)
+
+    # 2. Identify Selected Scenario
+    selected_sc = None
+    if scenario:
+        for sc in opt_report.all_scenarios:
+            if sc.scenario_id == scenario or sc.scenario_type == scenario:
+                selected_sc = sc
+                break
+
+    if not selected_sc:
+        selected_sc = opt_report.recommended_scenario or (opt_report.all_scenarios[0] if opt_report.all_scenarios else None)
+
     comp_details = comp.get("comparison") or comp
     item_comps_raw = comp_details.get("item_comparisons", {})
     if isinstance(item_comps_raw, dict):
         item_comps = list(item_comps_raw.values())
     else:
         item_comps = list(item_comps_raw)
-
-    base_cur = comp.get("base_currency", "INR")
-    l1_supplier = ranking_report.get("l1_supplier")
-    l1_supplier_id = l1_supplier.get("supplier_id") if l1_supplier and l1_supplier.get("is_eligible") else None
 
     allocations = []
     total_awarded_val = Decimal("0")
@@ -2557,11 +3598,14 @@ def _generate_fresh_award_proposal(rfq_id: str, comp: Dict[str, Any], scenario: 
 
     for item_comp in item_comps:
         rfq_line_id = item_comp.get("rfq_line_id")
-        sku = item_comp.get("sku") or item_comp.get("rfq_line_id")
-        desc = item_comp.get("item_description") or item_comp.get("description") or sku
-        raw_req_q = item_comp.get("requested_quantity")
+        canonical_rfq_item = rfq_items_map.get(rfq_line_id)
+        
+        sku = (canonical_rfq_item.sku if canonical_rfq_item and canonical_rfq_item.sku else None) or item_comp.get("sku") or rfq_line_id
+        desc = (canonical_rfq_item.description if canonical_rfq_item and canonical_rfq_item.description else None) or item_comp.get("item_description") or item_comp.get("description") or sku
+        
+        raw_req_q = canonical_rfq_item.requested_quantity if canonical_rfq_item else item_comp.get("requested_quantity")
         req_qty = Decimal(str(raw_req_q)) if raw_req_q is not None and str(raw_req_q).strip() not in ["", "None", "null"] else None
-        req_uom = item_comp.get("requested_uom") or None
+        req_uom = (canonical_rfq_item.requested_uom if canonical_rfq_item else None) or item_comp.get("requested_uom") or None
 
         supplier_bids = []
         l1_line_supplier_id = None
@@ -2579,23 +3623,73 @@ def _generate_fresh_award_proposal(rfq_id: str, comp: Dict[str, Any], scenario: 
             qid = supp_price.get("quote_id", sid)
             landed = Decimal(str(supp_price.get("unit_landed_price_base") or supp_price.get("effective_unit_landed_cost") or 0))
             cur = supp_price.get("quoted_currency") or supp_price.get("currency", base_cur)
-            qqty = Decimal(str(supp_price.get("quoted_qty") or supp_price.get("quoted_quantity", req_qty)))
+            
+            raw_qqty = supp_price.get("quoted_qty") or supp_price.get("quoted_quantity")
+            qqty = Decimal(str(raw_qqty)) if raw_qqty is not None and str(raw_qqty).strip() not in ["", "None", "null"] else None
             quom = supp_price.get("quoted_uom", req_uom)
             is_comparable = supp_price.get("is_comparable", True)
+
+            base_unit_price = Decimal(str(supp_price.get("unit_price_quoted", 0)))
+            discount_pct = Decimal(str(supp_price.get("discount_pct", 0)))
+            net_unit_price = Decimal(str(supp_price.get("net_unit_price_quoted", base_unit_price)))
+            tax_rate_pct = Decimal(str(supp_price.get("tax_rate_pct", 0)))
+            tax_amount = Decimal(str(supp_price.get("tax_amount_quoted", 0)))
+            allocated_charges = Decimal(str(supp_price.get("allocated_charges_quoted", 0)))
+            exchange_rate = Decimal(str(supp_price.get("exchange_rate", 1.0)))
+            uom_factor = Decimal(str(supp_price.get("uom_conversion_factor", 1.0)))
 
             if landed > 0 and is_comparable and (min_line_cost is None or landed < min_line_cost):
                 min_line_cost = landed
                 l1_line_supplier_id = sid
 
             if is_comparable and landed > 0:
+                per_unit_tax = (tax_amount / req_qty) if (req_qty and req_qty > Decimal("0") and tax_amount > Decimal("0")) else (net_unit_price * (tax_rate_pct / Decimal("100.0")) * exchange_rate)
+                per_unit_charges = (allocated_charges / req_qty) if (req_qty and req_qty > Decimal("0") and allocated_charges > Decimal("0")) else Decimal("0")
+
+                converted_capacity = (qqty * uom_factor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if qqty is not None else None
+
+                uom_formula = None
+                if uom_factor != Decimal("1.0") and quom and req_uom and quom.upper().strip() != req_uom.upper().strip():
+                    uom_formula = f"{qqty} {quom} × {uom_factor} = {converted_capacity} {req_uom}"
+
+                landed_breakdown = {
+                    "base_unit_price": str(quantize_currency(base_unit_price)),
+                    "discount_pct": str(discount_pct),
+                    "net_unit_price": str(quantize_currency(net_unit_price)),
+                    "tax_rate_pct": str(tax_rate_pct),
+                    "tax_amount": str(quantize_currency(per_unit_tax)),
+                    "allocated_charges": str(quantize_currency(per_unit_charges)),
+                    "exchange_rate": str(exchange_rate),
+                    "quoted_currency": cur,
+                    "base_currency": base_cur,
+                    "unit_landed_cost": str(landed),
+                    "calculation_source": f"Supplier Quote {qid}",
+                    "uom_conversion_factor": str(uom_factor),
+                    "uom_conversion_formula": uom_formula,
+                }
+
                 supplier_bids.append({
                     "supplier_id": sid,
                     "supplier_name": sname,
                     "quote_id": qid,
-                    "quoted_qty": str(qqty),
+                    "quoted_qty": str(qqty) if qqty is not None else None,
                     "quoted_uom": quom,
+                    "supplier_quoted_qty": str(qqty) if qqty is not None else None,
+                    "supplier_quoted_uom": quom,
+                    "converted_capacity": str(converted_capacity) if converted_capacity is not None else None,
+                    "converted_uom": req_uom,
                     "unit_landed_cost": str(landed),
                     "currency": cur,
+                    "base_unit_price": str(quantize_currency(base_unit_price)),
+                    "discount_pct": str(discount_pct),
+                    "net_unit_price": str(quantize_currency(net_unit_price)),
+                    "tax_rate_pct": str(tax_rate_pct),
+                    "tax_amount": str(quantize_currency(per_unit_tax)),
+                    "allocated_charges": str(quantize_currency(per_unit_charges)),
+                    "exchange_rate": str(exchange_rate),
+                    "uom_conversion_factor": str(uom_factor),
+                    "uom_conversion_formula": uom_formula,
+                    "landed_price_breakdown": landed_breakdown,
                     "is_comparable": True,
                     "is_l1_for_line": False,
                 })
@@ -2604,75 +3698,149 @@ def _generate_fresh_award_proposal(rfq_id: str, comp: Dict[str, Any], scenario: 
             if b["supplier_id"] == l1_line_supplier_id:
                 b["is_l1_for_line"] = True
 
+        # Build splits from selected optimization scenario / line recommendation
         splits = []
-        selected_bid = None
+        bids_by_supp = {b["supplier_id"]: b for b in supplier_bids}
+        seen_split_supps = set()
 
-        if scenario == "SINGLE_SUPPLIER_L1" and l1_supplier_id:
-            for b in supplier_bids:
-                if b["supplier_id"] == l1_supplier_id:
-                    selected_bid = b
-                    break
-        elif scenario == "LINE_ITEM_OPTIMAL" and l1_line_supplier_id:
-            for b in supplier_bids:
-                if b["supplier_id"] == l1_line_supplier_id:
-                    selected_bid = b
-                    break
+        line_rec = opt_report.line_recommendations.get(rfq_line_id)
+        if line_rec and line_rec.recommended_splits:
+            source_line_plans = line_rec.recommended_splits
+        else:
+            source_line_plans = selected_sc.line_plans.get(rfq_line_id, []) if selected_sc else []
 
-        if not selected_bid and supplier_bids:
-            selected_bid = supplier_bids[0]
+        for lp in source_line_plans:
+            if lp.supplier_id in seen_split_supps:
+                continue
+            seen_split_supps.add(lp.supplier_id)
 
-        if selected_bid:
-            unit_price = Decimal(selected_bid["unit_landed_cost"])
-            awarded_qty = req_qty
-            split_val = awarded_qty * unit_price
+            bid_info = bids_by_supp.get(lp.supplier_id, {})
+            unit_price = lp.unit_landed_cost
+            awarded_qty = lp.awarded_qty
+            bid_qty = lp.quoted_capacity
+            quom = lp.quoted_uom or bid_info.get("supplier_quoted_uom", req_uom)
+            uom_factor = getattr(lp, "uom_conversion_factor", None) or Decimal(str(bid_info.get("uom_conversion_factor", 1.0)))
+            conv_cap = getattr(lp, "converted_capacity", None)
+            if conv_cap is None and bid_qty is not None:
+                conv_cap = (bid_qty * uom_factor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            
+            unused_conv = getattr(lp, "unused_converted_qty", None)
+            if unused_conv is None and conv_cap is not None:
+                unused_conv = quantize_currency(conv_cap - awarded_qty)
+            
+            unused_quote = getattr(lp, "unused_quote_qty", None)
+            if unused_quote is None and conv_cap is not None and uom_factor > Decimal("0"):
+                unused_quote = ((conv_cap - awarded_qty) / uom_factor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+            uom_formula = getattr(lp, "uom_conversion_formula", None) or bid_info.get("uom_conversion_formula")
+            split_val = lp.split_value
+            award_val_formula = f"{awarded_qty} {req_uom or 'units'} × {base_cur} {unit_price:,.2f} = {base_cur} {split_val:,.2f}"
+
             splits.append({
-                "supplier_id": selected_bid["supplier_id"],
-                "supplier_name": selected_bid["supplier_name"],
-                "quote_id": selected_bid["quote_id"],
+                "supplier_id": lp.supplier_id,
+                "supplier_name": lp.supplier_name,
+                "quote_id": lp.quote_id or bid_info.get("quote_id", ""),
                 "allocated_qty": str(awarded_qty),
-                "quoted_uom": selected_bid["quoted_uom"],
+                "quoted_uom": quom,
+                "supplier_quoted_qty": str(bid_qty) if bid_qty is not None else None,
+                "supplier_quoted_uom": quom,
+                "converted_capacity": str(conv_cap) if conv_cap is not None else None,
+                "converted_uom": req_uom,
                 "unit_landed_cost": str(unit_price),
                 "split_value": str(split_val),
-                "is_l1_for_line": selected_bid.get("is_l1_for_line", False),
-                "quoted_capacity": str(selected_bid["quoted_qty"])
+                "is_l1_for_line": bid_info.get("is_l1_for_line", False),
+                "quoted_capacity": str(bid_qty) if bid_qty is not None else None,
+                "unused_quote_qty": str(unused_quote) if unused_quote is not None else None,
+                "unused_converted_qty": str(unused_conv) if unused_conv is not None else None,
+                "base_unit_price": bid_info.get("base_unit_price"),
+                "discount_pct": bid_info.get("discount_pct", "0"),
+                "tax_rate_pct": bid_info.get("tax_rate_pct", "0"),
+                "tax_amount": bid_info.get("tax_amount", "0"),
+                "allocated_charges": bid_info.get("allocated_charges", "0"),
+                "exchange_rate": bid_info.get("exchange_rate", "1.0"),
+                "uom_conversion_factor": str(uom_factor),
+                "uom_conversion_formula": uom_formula,
+                "landed_price_breakdown": bid_info.get("landed_price_breakdown", {}),
+                "award_value_formula": award_val_formula
             })
-            total_allocated = awarded_qty
-            unallocated = Decimal("0")
-            line_val = split_val
-            total_awarded_val += line_val
-            fully_allocated_count += 1
-            alloc_state = "FULLY_ALLOCATED"
-        else:
-            total_allocated = Decimal("0")
-            unallocated = req_qty
-            line_val = Decimal("0")
+
+        total_allocated = sum((Decimal(s["allocated_qty"]) for s in splits), Decimal("0"))
+        remaining_qty = max(Decimal("0"), req_qty - total_allocated) if req_qty is not None else None
+        shortfall_qty = remaining_qty
+        excess_qty = max(Decimal("0"), total_allocated - req_qty) if req_qty is not None else Decimal("0")
+        fulfillment_pct = ((total_allocated / req_qty) * Decimal("100.0")).quantize(Decimal("0.1")) if req_qty and req_qty > Decimal("0") else Decimal("0")
+
+        line_val = sum((Decimal(s["split_value"]) for s in splits), Decimal("0"))
+        total_awarded_val += line_val
+
+        if req_qty is None:
+            alloc_state = "QUANTITY_UNAVAILABLE"
             unallocated_count += 1
-            alloc_state = "NOT_QUOTED" if not supplier_bids else "UNALLOCATED"
+        elif total_allocated == req_qty and req_qty > Decimal("0"):
+            alloc_state = "FULLY_ALLOCATED"
+            fully_allocated_count += 1
+        elif total_allocated > Decimal("0"):
+            alloc_state = "PARTIALLY_ALLOCATED"
+            partially_allocated_count += 1
+        else:
+            alloc_state = "UNALLOCATED"
+            unallocated_count += 1
+
+        line_rec = opt_report.line_recommendations.get(rfq_line_id)
+        if line_rec:
+            if hasattr(line_rec, "model_dump"):
+                line_rec_dict = line_rec.model_dump(mode="json")
+            else:
+                line_rec_dict = json.loads(line_rec.json())
+        else:
+            line_rec_dict = {}
 
         allocations.append({
             "rfq_line_id": rfq_line_id,
             "item_sku": sku,
             "item_description": desc,
-            "required_qty": str(req_qty),
+            "required_qty": str(req_qty) if req_qty is not None else None,
             "required_uom": req_uom,
+            "rfq_required_qty": str(req_qty) if req_qty is not None else None,
+            "rfq_required_uom": req_uom,
             "total_allocated_qty": str(total_allocated),
-            "unallocated_qty": str(unallocated),
+            "awarded_qty": str(total_allocated),
+            "unallocated_qty": str(remaining_qty if remaining_qty is not None else "0"),
+            "remaining_qty": str(remaining_qty) if remaining_qty is not None else None,
+            "shortfall_qty": str(shortfall_qty) if shortfall_qty is not None else None,
+            "excess_qty": str(excess_qty),
+            "fulfillment_pct": str(fulfillment_pct),
+            "fulfillment_percentage": str(fulfillment_pct),
             "total_line_value": str(line_val),
+            "award_value": str(line_val),
             "allocation_state": alloc_state,
+            "allocation_status": alloc_state,
+            "recommendation": line_rec_dict,
             "supplier_splits": splits,
             "available_bids": supplier_bids
         })
 
-    has_unalloc = unallocated_count > 0 or partially_allocated_count > 0 or any(Decimal(a["unallocated_qty"]) > 0 for a in allocations)
+    has_unalloc = unallocated_count > 0 or partially_allocated_count > 0 or any(Decimal(str(a.get("unallocated_qty", 0))) > Decimal("0") for a in allocations)
+    report_dict = (
+        opt_report.model_dump(mode="json")
+        if hasattr(opt_report, "model_dump")
+        else json.loads(opt_report.json())
+    )
 
     return {
         "award_id": f"AWD-{rfq_id}",
         "rfq_id": rfq_id,
-        "comparison_id": comp["comparison_id"],
+        "comparison_id": comp.get("comparison_id", comp_details.get("comparison_id", "COMP-UNKNOWN")),
         "status": "DRAFT",
-        "selected_scenario": scenario,
+        "selected_scenario": selected_sc.scenario_type if selected_sc else "COST_OPTIMIZED_SPLIT",
+        "sourcing_strategy": strategy,
+        "recommended_scenario_id": opt_report.recommended_scenario.scenario_id if opt_report.recommended_scenario else None,
+        "selected_scenario_id": selected_sc.scenario_id if selected_sc else None,
+        "is_buyer_override": False,
+        "override_reason": None,
+        "optimization_report": report_dict,
         "base_currency": base_cur,
-        "total_awarded_value": str(total_awarded_val),
+        "total_awarded_value": str(quantize_currency(total_awarded_val)),
         "total_required_items": len(allocations),
         "fully_allocated_items_count": fully_allocated_count,
         "partially_allocated_items_count": partially_allocated_count,
@@ -2698,32 +3866,82 @@ def build_proposed_award_allocation(rfq_id: str, comparison_id: Optional[str] = 
 
     # 1. FINALIZED awards are locked and authoritative
     if existing_award and existing_award.get("status") == "FINALIZED":
-        default_scenario = existing_award.get("selected_scenario") or "SINGLE_SUPPLIER_L1"
+        default_scenario = existing_award.get("selected_scenario")
         fresh_bids_proposal = _generate_fresh_award_proposal(rfq_id, comp, default_scenario)
         bids_by_line = {a["rfq_line_id"]: a.get("available_bids", []) for a in fresh_bids_proposal.get("allocations", [])}
+        recs_by_line = {a["rfq_line_id"]: a.get("recommendation", {}) for a in fresh_bids_proposal.get("allocations", [])}
         for a in existing_award.get("allocations", []):
             if "available_bids" not in a or not a["available_bids"]:
                 a["available_bids"] = bids_by_line.get(a["rfq_line_id"], [])
+            if "recommendation" not in a or not a["recommendation"]:
+                a["recommendation"] = recs_by_line.get(a["rfq_line_id"], {})
+        if "optimization_report" not in existing_award:
+            existing_award["optimization_report"] = fresh_bids_proposal.get("optimization_report", {})
         return existing_award
 
     # 2. REOPENED awards preserve saved allocations unless explicitly switching scenario
     if existing_award and existing_award.get("status") == "REOPENED" and not scenario:
-        default_scenario = existing_award.get("selected_scenario") or "SINGLE_SUPPLIER_L1"
+        default_scenario = existing_award.get("selected_scenario")
         fresh_bids_proposal = _generate_fresh_award_proposal(rfq_id, comp, default_scenario)
         bids_by_line = {a["rfq_line_id"]: a.get("available_bids", []) for a in fresh_bids_proposal.get("allocations", [])}
+        recs_by_line = {a["rfq_line_id"]: a.get("recommendation", {}) for a in fresh_bids_proposal.get("allocations", [])}
         for a in existing_award.get("allocations", []):
             if "available_bids" not in a or not a["available_bids"]:
                 a["available_bids"] = bids_by_line.get(a["rfq_line_id"], [])
+            if "recommendation" not in a or not a["recommendation"]:
+                a["recommendation"] = recs_by_line.get(a["rfq_line_id"], {})
+        if "optimization_report" not in existing_award:
+            existing_award["optimization_report"] = fresh_bids_proposal.get("optimization_report", {})
         return existing_award
 
     # 3. Draft mode or explicit scenario switch
-    target_scenario = scenario or (existing_award.get("selected_scenario") if existing_award else "SINGLE_SUPPLIER_L1")
+    target_scenario = scenario or (existing_award.get("selected_scenario") if existing_award else None)
     proposal = _generate_fresh_award_proposal(rfq_id, comp, target_scenario)
 
     if existing_award:
         proposal["award_id"] = existing_award.get("award_id", f"AWD-{rfq_id}")
         proposal["status"] = existing_award.get("status", "DRAFT")
         proposal["buyer_accepted_unallocated"] = existing_award.get("buyer_accepted_unallocated", False)
+
+        # Restore saved draft allocations and line decision statuses if not an explicit scenario override
+        if not scenario and existing_award.get("allocations"):
+            saved_lines = {a["rfq_line_id"]: a for a in existing_award.get("allocations", [])}
+            for alloc in proposal.get("allocations", []):
+                lid = alloc.get("rfq_line_id")
+                if lid in saved_lines:
+                    saved_alloc = saved_lines[lid]
+                    if saved_alloc.get("buyer_decision_status"):
+                        alloc["buyer_decision_status"] = saved_alloc.get("buyer_decision_status")
+                    if saved_alloc.get("supplier_splits"):
+                        alloc["supplier_splits"] = saved_alloc.get("supplier_splits")
+                        alloc["total_allocated_qty"] = saved_alloc.get("total_allocated_qty", alloc.get("total_allocated_qty"))
+                        alloc["remaining_qty"] = saved_alloc.get("remaining_qty", alloc.get("remaining_qty"))
+                        alloc["shortfall_qty"] = saved_alloc.get("shortfall_qty", alloc.get("shortfall_qty"))
+                        alloc["unallocated_qty"] = saved_alloc.get("unallocated_qty", alloc.get("unallocated_qty"))
+                        alloc["fulfillment_pct"] = saved_alloc.get("fulfillment_pct", alloc.get("fulfillment_pct"))
+                        alloc["total_line_value"] = saved_alloc.get("total_line_value", alloc.get("total_line_value"))
+                        alloc["allocation_state"] = saved_alloc.get("allocation_state", alloc.get("allocation_state"))
+
+            # Re-sum grand totals deterministically across restored allocations
+            recalc_tot_val = Decimal("0")
+            recalc_fully = 0
+            recalc_partial = 0
+            recalc_unalloc = 0
+            for a in proposal.get("allocations", []):
+                recalc_tot_val += Decimal(str(a.get("total_line_value", 0)))
+                state = a.get("allocation_state", "UNALLOCATED")
+                if state in ["FULLY_ALLOCATED", "FULLY_FULFILLED"]:
+                    recalc_fully += 1
+                elif state in ["PARTIALLY_ALLOCATED", "PARTIALLY_FULFILLED"]:
+                    recalc_partial += 1
+                else:
+                    recalc_unalloc += 1
+
+            proposal["total_awarded_value"] = str(quantize_currency(recalc_tot_val))
+            proposal["fully_allocated_items_count"] = recalc_fully
+            proposal["partially_allocated_items_count"] = recalc_partial
+            proposal["unallocated_items_count"] = recalc_unalloc
+            proposal["has_unallocated_quantities"] = (recalc_unalloc > 0 or recalc_partial > 0)
 
     return proposal
 
@@ -2736,8 +3954,10 @@ def save_award_decision(rfq_id: str, award_data: Dict[str, Any], is_finalized: b
     3. Strict Decimal non-negative quantity parsing.
     4. Authoritative unit price resolution from comparison (never trusts client price).
     5. Supplier eligibility check against authoritative comparison bids.
-    6. Partial/unallocated award acknowledgement enforcement.
-    7. Deterministic Decimal financial recalculation.
+    6. Supplier Quoted Quantity constraint (awardable_qty <= quoted_qty).
+    7. RFQ Required Quantity constraint (total_allocated_qty <= required_qty).
+    8. Partial/unallocated award acknowledgement enforcement.
+    9. Deterministic Decimal financial recalculation & calculation lineage preservation.
     """
     rfq = get_rfq(rfq_id)
     if not rfq:
@@ -2747,6 +3967,7 @@ def save_award_decision(rfq_id: str, award_data: Dict[str, Any], is_finalized: b
     if not comp:
         raise ValueError(f"No valid commercial comparison available for RFQ {rfq_id}.")
     comp_id = comp.get("comparison_id", "COMP-UNKNOWN")
+    base_cur = comp.get("base_currency", "INR")
 
     existing_award = get_award_decision(rfq_id)
     val_errors: List[str] = []
@@ -2754,7 +3975,6 @@ def save_award_decision(rfq_id: str, award_data: Dict[str, Any], is_finalized: b
 
     # Safeguard 1: Finalized Immutability Guard
     if existing_award and existing_award.get("status") == "FINALIZED" and is_finalized:
-        # A direct finalize request on an already finalized award must be rejected
         val_errors.append("Award is already FINALIZED and locked. To modify allocations, please reopen the award first.")
         existing_award["validation_passed"] = False
         existing_award["validation_errors"] = val_errors
@@ -2797,7 +4017,8 @@ def save_award_decision(rfq_id: str, award_data: Dict[str, Any], is_finalized: b
         seen_line_ids.add(line_id)
 
         canonical_line = rfq_lines_map[line_id]
-        req_qty = Decimal(str(canonical_line.get("required_qty", 0)))
+        raw_req = canonical_line.get("required_qty")
+        req_qty = Decimal(str(raw_req)) if raw_req is not None and str(raw_req).strip() not in ["", "None", "null"] else None
         req_uom = canonical_line.get("required_uom", "PCS")
         item_sku = canonical_line.get("item_sku", line_id)
         item_desc = canonical_line.get("item_description", item_sku)
@@ -2850,6 +4071,18 @@ def save_award_decision(rfq_id: str, award_data: Dict[str, Any], is_finalized: b
 
             authoritative_unit_landed_cost = Decimal(str(bid["unit_landed_cost"]))
             
+            # Safeguard 6: Supplier Converted Capacity Ceiling Check
+            raw_bid_q = bid.get("supplier_quoted_qty") or bid.get("quoted_qty")
+            bid_quoted_qty = Decimal(str(raw_bid_q)) if raw_bid_q is not None and str(raw_bid_q).strip() not in ["", "None", "null"] else None
+            u_factor = Decimal(str(bid.get("uom_conversion_factor", 1.0)))
+            conv_cap = (bid_quoted_qty * u_factor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if bid_quoted_qty is not None else None
+
+            if conv_cap is not None and sp_qty > conv_cap + Decimal("0.001"):
+                val_errors.append(f"Line {line_id} ({item_sku}): Awarded quantity ({sp_qty} {req_uom}) exceeds supplier converted capacity ({conv_cap} {req_uom} equivalent to {bid_quoted_qty} {bid.get('supplier_quoted_uom', req_uom)}) for {bid['supplier_name']}.")
+
+            unused_conv = max(Decimal("0"), conv_cap - sp_qty) if conv_cap is not None else None
+            unused_quote = max(Decimal("0"), ((conv_cap - sp_qty) / u_factor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)) if conv_cap is not None and u_factor > Decimal("0") else None
+
             # Verify client price if passed; reject tampering
             raw_client_price = sp.get("unit_landed_cost")
             if raw_client_price is not None:
@@ -2862,8 +4095,10 @@ def save_award_decision(rfq_id: str, award_data: Dict[str, Any], is_finalized: b
                     val_errors.append(f"Line {line_id} ({item_sku}): Malformed unit price '{raw_client_price}'.")
                     continue
 
-            # Safeguard 6: Deterministic Decimal Financial Calculation
+            # Safeguard 7: Deterministic Decimal Financial Calculation
             sp_val = quantize_currency(sp_qty * authoritative_unit_landed_cost)
+            award_val_formula = f"{sp_qty} {req_uom or 'units'} × {base_cur} {authoritative_unit_landed_cost:,.2f} = {base_cur} {sp_val:,.2f}"
+
             line_alloc_qty += sp_qty
             line_total_val += sp_val
 
@@ -2872,42 +4107,91 @@ def save_award_decision(rfq_id: str, award_data: Dict[str, Any], is_finalized: b
                 "supplier_name": bid["supplier_name"],
                 "quote_id": bid["quote_id"],
                 "allocated_qty": str(sp_qty),
-                "quoted_uom": bid.get("quoted_uom", req_uom),
+                "quoted_uom": bid.get("supplier_quoted_uom") or bid.get("quoted_uom", req_uom or "PCS"),
+                "supplier_quoted_qty": str(bid_quoted_qty) if bid_quoted_qty is not None else None,
+                "supplier_quoted_uom": bid.get("supplier_quoted_uom") or bid.get("quoted_uom", req_uom or "PCS"),
+                "converted_capacity": str(conv_cap) if conv_cap is not None else None,
+                "converted_uom": req_uom,
                 "unit_landed_cost": str(authoritative_unit_landed_cost),
                 "split_value": str(sp_val),
                 "is_l1_for_line": bid.get("is_l1_for_line", False),
-                "quoted_capacity": str(bid.get("quoted_qty", req_qty))
+                "quoted_capacity": str(bid_quoted_qty) if bid_quoted_qty is not None else None,
+                "unused_quote_qty": str(unused_quote) if unused_quote is not None else None,
+                "unused_converted_qty": str(unused_conv) if unused_conv is not None else None,
+                "base_unit_price": bid.get("base_unit_price"),
+                "discount_pct": bid.get("discount_pct", "0"),
+                "tax_rate_pct": bid.get("tax_rate_pct", "0"),
+                "allocated_charges": bid.get("allocated_charges", "0"),
+                "exchange_rate": bid.get("exchange_rate", "1.0"),
+                "uom_conversion_factor": str(u_factor),
+                "uom_conversion_formula": bid.get("uom_conversion_formula"),
+                "landed_price_breakdown": bid.get("landed_price_breakdown", {}),
+                "award_value_formula": award_val_formula
             })
 
-        # Safeguard 7: Over-Allocation Check
-        if line_alloc_qty > req_qty:
+        # Safeguard 8: Over-Allocation Check against RFQ Required Quantity
+        if req_qty is None:
+            alloc_state = "QUANTITY_UNAVAILABLE"
+            unalloc_count += 1
+            remaining_qty = None
+            shortfall_qty = None
+            excess_qty = Decimal("0")
+            fulfillment_pct = Decimal("0")
+        elif line_alloc_qty > req_qty:
             val_errors.append(f"Line {line_id} ({item_sku}): Total allocated quantity ({line_alloc_qty}) exceeds required quantity ({req_qty}).")
             alloc_state = "OVER_ALLOCATED"
+            remaining_qty = Decimal("0")
+            shortfall_qty = Decimal("0")
+            excess_qty = line_alloc_qty - req_qty
+            fulfillment_pct = ((line_alloc_qty / req_qty) * Decimal("100.0")).quantize(Decimal("0.1"))
         elif line_alloc_qty == req_qty and req_qty > Decimal("0"):
             fully_alloc_count += 1
             alloc_state = "FULLY_ALLOCATED"
+            remaining_qty = Decimal("0")
+            shortfall_qty = Decimal("0")
+            excess_qty = Decimal("0")
+            fulfillment_pct = Decimal("100.0")
         elif line_alloc_qty > Decimal("0"):
             partially_alloc_count += 1
             alloc_state = "PARTIALLY_ALLOCATED"
+            remaining_qty = req_qty - line_alloc_qty
+            shortfall_qty = remaining_qty
+            excess_qty = Decimal("0")
+            fulfillment_pct = ((line_alloc_qty / req_qty) * Decimal("100.0")).quantize(Decimal("0.1"))
             val_warnings.append(f"Line {line_id}: Partially allocated ({line_alloc_qty}/{req_qty} {req_uom}).")
         else:
             unalloc_count += 1
             alloc_state = "UNALLOCATED"
+            remaining_qty = req_qty
+            shortfall_qty = req_qty
+            excess_qty = Decimal("0")
+            fulfillment_pct = Decimal("0")
             val_warnings.append(f"Line {line_id} ({item_sku}): 0 quantity allocated.")
 
-        unalloc_qty = max(Decimal("0"), req_qty - line_alloc_qty)
         total_val += line_total_val
 
         sanitized_allocations.append({
             "rfq_line_id": line_id,
             "item_sku": item_sku,
             "item_description": item_desc,
-            "required_qty": str(req_qty),
+            "buyer_decision_status": alloc.get("buyer_decision_status"),
+            "required_qty": str(req_qty) if req_qty is not None else None,
             "required_uom": req_uom,
+            "rfq_required_qty": str(req_qty) if req_qty is not None else None,
+            "rfq_required_uom": req_uom,
             "total_allocated_qty": str(line_alloc_qty),
-            "unallocated_qty": str(unalloc_qty),
+            "awarded_qty": str(line_alloc_qty),
+            "unallocated_qty": str(remaining_qty if remaining_qty is not None else "0"),
+            "remaining_qty": str(remaining_qty) if remaining_qty is not None else None,
+            "shortfall_qty": str(shortfall_qty) if shortfall_qty is not None else None,
+            "excess_qty": str(excess_qty),
+            "fulfillment_pct": str(fulfillment_pct),
+            "fulfillment_percentage": str(fulfillment_pct),
             "total_line_value": str(line_total_val),
+            "award_value": str(line_total_val),
             "allocation_state": alloc_state,
+            "allocation_status": alloc_state,
+            "recommendation": canonical_line.get("recommendation", {}),
             "supplier_splits": sanitized_splits,
             "available_bids": canonical_line.get("available_bids", [])
         })
@@ -2915,24 +4199,30 @@ def save_award_decision(rfq_id: str, award_data: Dict[str, Any], is_finalized: b
     # Include any missing RFQ lines as unallocated
     for line_id, canonical_line in rfq_lines_map.items():
         if line_id not in seen_line_ids:
-            req_qty = Decimal(str(canonical_line.get("required_qty", 0)))
+            raw_req = canonical_line.get("required_qty")
+            req_qty = Decimal(str(raw_req)) if raw_req is not None and str(raw_req).strip() not in ["", "None", "null"] else None
             unalloc_count += 1
             sanitized_allocations.append({
                 "rfq_line_id": line_id,
                 "item_sku": canonical_line.get("item_sku", line_id),
                 "item_description": canonical_line.get("item_description", ""),
-                "required_qty": str(req_qty),
+                "required_qty": str(req_qty) if req_qty is not None else None,
                 "required_uom": canonical_line.get("required_uom", "PCS"),
                 "total_allocated_qty": "0",
-                "unallocated_qty": str(req_qty),
+                "unallocated_qty": str(req_qty if req_qty is not None else "0"),
+                "remaining_qty": str(req_qty) if req_qty is not None else None,
+                "shortfall_qty": str(req_qty) if req_qty is not None else None,
+                "excess_qty": "0",
+                "fulfillment_pct": "0",
                 "total_line_value": "0.00",
                 "allocation_state": "UNALLOCATED",
+                "recommendation": canonical_line.get("recommendation", {}),
                 "supplier_splits": [],
                 "available_bids": canonical_line.get("available_bids", [])
             })
             val_warnings.append(f"Line {line_id}: Not included in submission (marked unallocated).")
 
-    # Safeguard 8: Partial / Unallocated Award Acknowledgement Requirement
+    # Safeguard 9: Partial / Unallocated Award Acknowledgement Requirement
     has_unalloc = unalloc_count > 0 or partially_alloc_count > 0 or any(Decimal(str(a.get("unallocated_qty", 0))) > Decimal("0") for a in sanitized_allocations)
     accepted_unalloc = bool(award_data.get("buyer_accepted_unallocated", False))
 
@@ -2960,6 +4250,7 @@ def save_award_decision(rfq_id: str, award_data: Dict[str, Any], is_finalized: b
         "has_unallocated_quantities": has_unalloc,
         "buyer_accepted_unallocated": accepted_unalloc,
         "allocations": sanitized_allocations,
+        "optimization_report": fresh_proposal.get("optimization_report", {}),
         "validation_passed": is_valid,
         "validation_errors": val_errors,
         "validation_warnings": val_warnings,
@@ -3115,46 +4406,52 @@ def save_application_settings(new_settings: Dict[str, Any]) -> Dict[str, Any]:
 
 def reset_all_procurement_data() -> Dict[str, Any]:
     """
-    Cleans transient quotes and caches back to a fresh state while preserving RFQs.
-    CRITICAL INVARIANT: RFQ documents are permanent historical records and are NEVER physically deleted.
+    Cleans ONLY explicitly identified test-generated quotes, comparisons, and test RFQs.
+    CRITICAL INVARIANT: Real user-created RFQs, quotations, comparisons, and awards are permanent business records and are NEVER deleted.
     """
-    # 1. Ensure RFQs directory exists and preserve all RFQs permanently
+    # 1. Preserve RFQs directory and all user RFQs
     RFQS_DIR.mkdir(parents=True, exist_ok=True)
-    ensure_default_rfqs()
 
-    # 2. Clean Comparisons
+    # 2. Only remove test RFQs
+    for rf in list(RFQS_DIR.glob("*.json")):
+        try:
+            data = json.loads(rf.read_text(encoding="utf-8"))
+            if data.get("source") in ["TEST", "DEMO"] or data.get("is_test", False) or rf.stem.startswith("TEST-") or rf.stem.startswith("RFQ-TEST-"):
+                rf.unlink()
+        except Exception:
+            pass
+
+    # 3. Only remove test Comparisons
     if COMPARISONS_DIR.exists():
-        shutil.rmtree(COMPARISONS_DIR)
-    COMPARISONS_DIR.mkdir(parents=True, exist_ok=True)
+        for cf in list(COMPARISONS_DIR.glob("*.json")):
+            try:
+                data = json.loads(cf.read_text(encoding="utf-8"))
+                rfq_id = data.get("rfq_id", "")
+                if rfq_id.startswith("TEST-") or rfq_id.startswith("RFQ-TEST-") or cf.stem.startswith("TEST-"):
+                    cf.unlink()
+            except Exception:
+                pass
 
-    # 3. Clean Awards
+    # 4. Only remove test Awards
     if AWARDS_DIR.exists():
-        shutil.rmtree(AWARDS_DIR)
-    AWARDS_DIR.mkdir(parents=True, exist_ok=True)
+        for af in list(AWARDS_DIR.glob("*.json")):
+            try:
+                if af.stem.startswith("TEST-") or af.stem.startswith("RFQ-TEST-"):
+                    af.unlink()
+            except Exception:
+                pass
 
-    # 4. Clean quotes & test directories
+    # 5. Clean test quote directories only
     for item in list(DATA_DIR.iterdir()):
-        if item.name in ["item_master", "rfqs", "comparisons", "awards", "settings.json"]:
+        if item.name in ["item_master", "rfqs", "comparisons", "awards", "settings.json", "supplier_mappings.json", "import_batches.json"]:
             continue
-        if item.is_dir():
+        if item.is_dir() and (item.name.startswith("TEST-") or item.name.startswith("Q-BENCH-") or item.name.startswith("BENCH-") or "test" in item.name.lower()):
             try:
                 shutil.rmtree(item)
             except Exception:
                 pass
-        elif item.is_file():
-            try:
-                item.unlink()
-            except Exception:
-                pass
 
-    # 5. Restore baseline Item Master
-    ITEM_MASTER_DIR.mkdir(parents=True, exist_ok=True)
-    im_file = ITEM_MASTER_DIR / "items.json"
-    benchmark_im = BASE_DIR / "datasets" / "procurement_benchmark" / "item_master.json"
-    if benchmark_im.exists():
-        im_file.write_text(benchmark_im.read_text(encoding="utf-8"), encoding="utf-8")
-
-    return {"status": "success", "message": "All procurement data reset to clean initial state."}
+    return {"status": "success", "message": "Test artifacts cleaned. All user-created RFQs and quotes remain permanently preserved."}
 
 
 def seed_demo_benchmark_data() -> Dict[str, Any]:

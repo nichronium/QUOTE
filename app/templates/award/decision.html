@@ -3,6 +3,290 @@
 {% block title %}Step 5 — Award Decision &bull; {{ rfq.rfq_id }} — Quote Intelligence{% endblock %}
 
 {% block content %}
+<style>
+/* ============================================================= */
+/* ENTERPRISE CALCULATION POPOVER COMPONENT (HIGH SIGNAL / LOW NOISE) */
+/* ============================================================= */
+.calc-popover-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+}
+
+.calc-info-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    background: rgba(59, 130, 246, 0.12);
+    color: var(--accent);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    font-size: 0.6875rem;
+    font-weight: 800;
+    cursor: pointer;
+    padding: 0;
+    margin-left: 0.35rem;
+    line-height: 1;
+    transition: all 0.15s ease;
+}
+
+.calc-info-btn:hover,
+.calc-info-btn:focus,
+.calc-popover-wrapper:focus-within .calc-info-btn,
+.calc-popover-wrapper.is-open .calc-info-btn {
+    background: var(--accent);
+    color: #ffffff;
+    border-color: var(--accent);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+.calc-popover-card {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: 340px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 14px 30px -4px rgba(0, 0, 0, 0.65), 0 4px 10px -2px rgba(0, 0, 0, 0.4);
+    padding: 0.875rem 1rem;
+    z-index: 1050;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    text-align: left;
+}
+
+.calc-popover-card.align-right {
+    left: auto;
+    right: 0;
+    transform: none;
+}
+
+.calc-popover-card.align-left {
+    left: 0;
+    transform: none;
+}
+
+.calc-popover-wrapper:hover .calc-popover-card,
+.calc-popover-wrapper:focus-within .calc-popover-card,
+.calc-popover-wrapper.is-open .calc-popover-card {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.calc-popover-card::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 6px;
+    border-style: solid;
+    border-color: var(--border-color) transparent transparent transparent;
+}
+
+.calc-popover-card.align-right::after {
+    left: auto;
+    right: 12px;
+    transform: none;
+}
+
+.calc-popover-card.align-left::after {
+    left: 12px;
+    transform: none;
+}
+
+.calc-popover-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.4rem;
+    margin-bottom: 0.5rem;
+}
+
+.calc-popover-title {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+}
+
+.calc-popover-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.2rem 0;
+    font-size: 0.75rem;
+}
+
+.calc-popover-label {
+    color: var(--text-muted);
+}
+
+.calc-popover-value {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.calc-popover-total {
+    border-top: 1px dashed var(--border-color);
+    margin-top: 0.4rem;
+    padding-top: 0.4rem;
+    font-weight: 800;
+    font-size: 0.8125rem;
+    color: var(--success);
+}
+
+.calc-popover-source {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    background: var(--bg-card-subtle);
+    padding: 0.35rem 0.5rem;
+    border-radius: 4px;
+    margin-top: 0.5rem;
+    border: 1px solid var(--border-subtle);
+}
+
+/* Typographic & Container Hierarchy */
+.alloc-line-card {
+    margin-bottom: 1.25rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.alloc-line-card.is-overallocated {
+    border-color: var(--danger) !important;
+    box-shadow: 0 0 0 1px var(--danger);
+}
+
+.alloc-line-card.is-modified {
+    border-left: 4px solid var(--accent);
+}
+
+.line-req-header {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%);
+    padding: 0.875rem 1.25rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.line-product-title {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.line-splits-drawer {
+    padding: 1.25rem;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-primary);
+}
+
+.line-fulfillment-footer {
+    background: var(--bg-card-subtle);
+    padding: 0.75rem 1.25rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.qty-constraint-hint {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 0.2rem;
+    text-align: right;
+    font-family: var(--font-mono);
+}
+
+.qty-constraint-hint.is-limit {
+    color: var(--warning);
+    font-weight: 700;
+}
+
+.progress-track {
+    width: 120px;
+    height: 7px;
+    background: var(--bg-card-subtle);
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid var(--border-subtle);
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 0.5rem;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--success);
+    transition: width 0.25s ease, background-color 0.25s ease;
+}
+
+.secondary-provenance {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    margin-top: 0.15rem;
+}
+
+.badge-buyer-modified {
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    font-weight: 800;
+}
+
+.badge-buyer-accepted {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--success);
+    border: 1px solid var(--success);
+    font-weight: 800;
+}
+
+.price-details-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--accent);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+    margin-left: 0.35rem;
+    text-decoration: underline;
+}
+
+.price-details-trigger:hover {
+    color: var(--accent-light);
+}
+</style>
+
 <!-- Top Breadcrumb Bar -->
 <div class="breadcrumb-bar">
     <div class="breadcrumbs">
@@ -20,87 +304,94 @@
 </div>
 
 <!-- Accurate 5-Step Workflow Progression Stepper -->
-<div class="card" style="padding: 0.75rem 1.25rem; margin-bottom: 1.25rem; background: var(--bg-card); border: 1px solid var(--border-color);">
+<div class="card" style="padding: 0.6rem 1.25rem; margin-bottom: 1.25rem; background: var(--bg-card); border: 1px solid var(--border-color);">
     <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
         <!-- Step 1 -->
         <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; color: var(--text-main); font-weight: 700;">
-            <span class="badge badge-success" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">1</span>
+            <span class="badge badge-success" style="border-radius: 50%; width: 20px; height: 20px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem;">1</span>
             <span>RFQ Scope ({{ rfq.items|length }} items)</span>
         </div>
         <span style="color: var(--text-subtle);">&rarr;</span>
 
         <!-- Step 2 -->
         <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; color: var(--text-main); font-weight: 700;">
-            <span class="badge badge-success" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">2</span>
+            <span class="badge badge-success" style="border-radius: 50%; width: 20px; height: 20px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem;">2</span>
             <span>Supplier Quotes ({{ total_quotes_count or comparison.suppliers|length }} received)</span>
         </div>
         <span style="color: var(--text-subtle);">&rarr;</span>
 
         <!-- Step 3 -->
         <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; color: var(--text-main); font-weight: 700;">
-            <span class="badge badge-success" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">3</span>
+            <span class="badge badge-success" style="border-radius: 50%; width: 20px; height: 20px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem;">3</span>
             <span>Review &amp; Matching</span>
         </div>
         <span style="color: var(--text-subtle);">&rarr;</span>
 
         <!-- Step 4 -->
         <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; color: var(--text-main); font-weight: 700;">
-            <span class="badge badge-success" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">4</span>
+            <span class="badge badge-success" style="border-radius: 50%; width: 20px; height: 20px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem;">4</span>
             <span>Comparison Analysis</span>
         </div>
         <span style="color: var(--text-subtle);">&rarr;</span>
 
         <!-- Step 5 (Active) -->
         <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; font-weight: 800; color: var(--success);">
-            <span class="badge badge-success" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">5</span>
+            <span class="badge badge-success" style="border-radius: 50%; width: 20px; height: 20px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem;">5</span>
             <span>Award Decision</span>
         </div>
     </div>
 </div>
 
-<!-- Newer Commercial Evaluation Available Alert Banner -->
+<!-- Newer Comparison Snapshot Warning Banner (if applicable) -->
 {% if has_newer_comparison %}
-<div class="card" style="padding: 0.85rem 1.25rem; margin-bottom: 1.25rem; background: rgba(245, 158, 11, 0.1); border: 1px solid var(--warning); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
-    <div style="display: flex; align-items: center; gap: 0.75rem;">
-        <svg style="width: 20px; height: 20px; color: var(--warning); flex-shrink: 0;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-        </svg>
+<div class="card" style="background: rgba(245, 158, 11, 0.15); border: 1px solid var(--warning); padding: 0.875rem 1.25rem; margin-bottom: 1.25rem; border-radius: 8px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
         <div>
-            <strong style="color: var(--text-main); font-size: 0.875rem;">Newer Commercial Evaluation Available ({{ newer_comparison_id }})</strong>
-            <div style="font-size: 0.75rem; color: var(--text-muted);">
-                This finalized award remains locked to its original decision baseline ({{ award.comparison_id }}). To apply the latest evaluation results, reopen this award for revision.
+            <div style="display: flex; align-items: center; gap: 0.4rem; color: var(--warning); font-weight: 800; font-size: 0.875rem; text-transform: uppercase;">
+                <span>⚠ Newer Commercial Evaluation Available</span>
+            </div>
+            <div style="font-size: 0.8125rem; color: var(--text-main); margin-top: 0.25rem;">
+                A newer commercial comparison snapshot (<code>{{ newer_comparison_id }}</code>) was executed after this award was finalized.
             </div>
         </div>
+        <div>
+            <a href="/rfqs/{{ rfq.rfq_id }}/award?comparison_id={{ newer_comparison_id }}" class="btn btn-warning btn-sm" style="font-weight: 700;">
+                Review with Latest Snapshot &rarr;
+            </a>
+        </div>
     </div>
-    <a href="/comparisons/{{ newer_comparison_id }}" class="btn btn-secondary btn-sm">View Newer Evaluation &rarr;</a>
 </div>
 {% endif %}
 
 <!-- Dominant Page Identity Header Card -->
-<div class="card" style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.98) 0%, rgba(20, 31, 56, 0.95) 100%); border-top: 3px solid var(--success); padding: 1.25rem; margin-bottom: 1.25rem;">
-    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+<div class="card" style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.98) 0%, rgba(20, 31, 56, 0.95) 100%); border-top: 3px solid var(--success); padding: 1.1rem 1.25rem; margin-bottom: 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.85rem;">
         <div>
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
                 <span class="badge badge-success">Procurement Stage 5</span>
                 <code style="color: var(--accent); font-weight: 700; font-size: 0.8125rem;">{{ rfq.rfq_id }} &bull; {{ rfq.title }}</code>
                 {% if award.status == 'FINALIZED' %}
-                <span class="badge badge-success" style="font-weight: 700;">AWARD FINALIZED</span>
+                <span class="badge badge-success" style="font-weight: 700;">AWARD FINALIZED &bull; READY FOR PROCUREMENT HANDOFF</span>
                 {% elif award.status == 'REOPENED' %}
                 <span class="badge badge-warning" style="font-weight: 700;">AWARD REOPENED FOR REVISION</span>
                 {% else %}
-                <span class="badge badge-info">DRAFT ALLOCATION</span>
+                <span class="badge badge-info" id="global-award-status-badge">DRAFT ALLOCATION</span>
                 {% endif %}
             </div>
-            <h1 style="font-size: 1.4rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.25rem;">
-                Step 5 — Award Decision
+            <h1 style="font-size: 1.3rem; font-weight: 800; color: var(--text-main); margin: 0 0 0.2rem 0;">
+                Step 5 — Award Decision &amp; Allocation
             </h1>
-            <p style="font-size: 0.8125rem; color: var(--text-muted);">
-                Review and finalize which supplier(s) will receive each RFQ line. Allocate quantities, configure split-sourcing, and validate fulfillment before committing.
+            <p style="font-size: 0.8125rem; color: var(--text-muted); margin: 0;">
+                Authoritative recommended supplier allocations, dimension-safe UOM conversion, and transparent decision explainability.
             </p>
         </div>
 
-        <div>
-            {% if award.status == 'FINALIZED' %}
+        <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+            {% if award.status != 'FINALIZED' %}
+            <button type="button" class="btn btn-success btn-sm" onclick="openAcceptAllModal()" id="accept-all-top-btn" style="font-weight: 800; font-size: 0.8125rem; padding: 0.35rem 0.85rem; display: inline-flex; align-items: center; gap: 0.35rem;">
+                <span>★</span> Accept All Recommendations
+            </button>
+            {% else %}
             <form action="/rfqs/{{ rfq.rfq_id }}/award/reopen" method="POST" style="display: inline;">
                 <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Reopen this award to edit supplier allocations?');">
                     Re-open Award for Revision
@@ -111,466 +402,1611 @@
     </div>
 
     <!-- Summary Metrics Grid -->
-    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
-        <div style="background: var(--bg-card-subtle); padding: 0.6rem 0.85rem; border-radius: 6px; border: 1px solid var(--border-color);">
-            <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Total Award Commitment</div>
-            <div style="font-size: 1.2rem; font-weight: 800; color: var(--success); font-family: var(--font-mono);" id="header-total-val">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
+        <div style="background: var(--bg-card-subtle); padding: 0.55rem 0.8rem; border-radius: 6px; border: 1px solid var(--border-color);">
+            <div style="font-size: 0.6875rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Total Award Commitment</div>
+            <div style="font-size: 1.15rem; font-weight: 800; color: var(--success); font-family: var(--font-mono);" id="header-total-val">
                 {{ award.base_currency }} {{ award.total_awarded_value }}
             </div>
-            <div style="font-size: 0.75rem; color: var(--text-muted);">Landed &amp; Tax-Normalized</div>
+            <div style="font-size: 0.7rem; color: var(--text-muted);">Landed &amp; Tax-Normalized</div>
         </div>
 
-        <div style="background: var(--bg-card-subtle); padding: 0.6rem 0.85rem; border-radius: 6px; border: 1px solid var(--border-color);">
-            <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Allocated Lines</div>
-            <div style="font-size: 1.2rem; font-weight: 800; color: var(--text-main); font-family: var(--font-mono);" id="header-items-count">
+        <div style="background: var(--bg-card-subtle); padding: 0.55rem 0.8rem; border-radius: 6px; border: 1px solid var(--border-color);">
+            <div style="font-size: 0.6875rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Fulfillment Progress</div>
+            <div style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); font-family: var(--font-mono);" id="header-items-count">
                 {{ award.fully_allocated_items_count }} / {{ award.total_required_items }} Fully
             </div>
-            <div style="font-size: 0.75rem; color: var(--text-muted);" id="header-partially-count">
+            <div style="font-size: 0.7rem; color: var(--text-muted);" id="header-partially-count">
                 {{ award.partially_allocated_items_count }} Partial &bull; {{ award.unallocated_items_count }} Unallocated
             </div>
         </div>
 
-        <div style="background: var(--bg-card-subtle); padding: 0.6rem 0.85rem; border-radius: 6px; border: 1px solid var(--border-color);">
-            <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Starting Scenario</div>
-            <div style="font-size: 0.95rem; font-weight: 700; color: var(--accent); margin-top: 0.2rem;">
+        <div style="background: var(--bg-card-subtle); padding: 0.55rem 0.8rem; border-radius: 6px; border: 1px solid var(--border-color);">
+            <div style="font-size: 0.6875rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Sourcing Optimization</div>
+            <div style="font-size: 0.9375rem; font-weight: 700; color: var(--accent); margin-top: 0.15rem;">
                 {% if award.selected_scenario == 'SINGLE_SUPPLIER_L1' %}
-                Lowest Total Cost (Single)
+                Single Sourcing (Lowest Cost)
                 {% elif award.selected_scenario == 'LINE_ITEM_OPTIMAL' %}
-                Lowest Line Cost (Split)
+                Split Sourcing (Item Optimal)
                 {% else %}
-                Custom Manual Allocation
+                Authoritative Recommendation
                 {% endif %}
             </div>
-            <div style="font-size: 0.75rem; color: var(--text-muted);">From Comparison Model</div>
+            <div style="font-size: 0.7rem; color: var(--text-muted);">Dimension-Safe Allocation</div>
         </div>
 
-        <div style="background: var(--bg-card-subtle); padding: 0.6rem 0.85rem; border-radius: 6px; border: 1px solid var(--border-color);">
-            <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Decision Status</div>
-            <div style="font-size: 0.95rem; font-weight: 700; color: {% if award.status == 'FINALIZED' %}var(--success){% else %}var(--warning){% endif %}; margin-top: 0.2rem;">
+        <div style="background: var(--bg-card-subtle); padding: 0.55rem 0.8rem; border-radius: 6px; border: 1px solid var(--border-color);">
+            <div style="font-size: 0.6875rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Decision Status</div>
+            <div style="font-size: 0.9375rem; font-weight: 700; color: {% if award.status == 'FINALIZED' %}var(--success){% else %}var(--warning){% endif %}; margin-top: 0.15rem;" id="header-decision-status-text">
                 {{ award.status }}
             </div>
-            <div style="font-size: 0.75rem; color: var(--text-muted);">
+            <div style="font-size: 0.7rem; color: var(--text-muted);">
                 {% if award.awarded_at %}{{ award.awarded_at }}{% else %}Awaiting buyer finalization{% endif %}
             </div>
         </div>
     </div>
 </div>
 
-<!-- Procurement Execution Artifacts & Downloads Bar -->
-<div class="card" style="padding: 1rem 1.25rem; margin-bottom: 1.25rem; background: linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(15, 23, 42, 0.4) 100%); border: 1px solid var(--accent); border-radius: 8px;">
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+<!-- Execution Artifacts Download Ribbon -->
+<div class="card" style="padding: 0.75rem 1.25rem; margin-bottom: 1.25rem; background: linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(15, 23, 42, 0.4) 100%); border: 1px solid var(--accent); border-radius: 8px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
         <div>
-            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem;">
-                <span class="badge badge-primary" style="font-weight: 700;">EXECUTION ARTIFACTS</span>
-                <strong style="color: var(--text-main); font-size: 0.95rem;">Download Authoritative Procurement Documents</strong>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span class="badge badge-primary" style="font-weight: 700; font-size: 0.7rem;">EXECUTION ARTIFACTS</span>
+                <strong style="color: var(--text-main); font-size: 0.875rem;">Download Procurement Requisitions &amp; Analysis</strong>
             </div>
-            <div style="font-size: 0.75rem; color: var(--text-muted);">
-                Generated directly from the authoritative finalized award decision &amp; comparison baseline.
+            <div style="font-size: 0.7rem; color: var(--text-muted);">
+                Authoritative workbooks and PDFs generated directly from normalized evaluation baseline.
             </div>
         </div>
         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-            <a href="/rfqs/{{ rfq.rfq_id }}/award/export/excel" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 0.4rem;" download>
-                <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            <a href="/rfqs/{{ rfq.rfq_id }}/award/export/excel" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.75rem;" download>
+                <svg style="width: 13px; height: 13px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 Award Workbook (.xlsx)
             </a>
-            <a href="/rfqs/{{ rfq.rfq_id }}/award/export/pdf" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 0.4rem;" download>
-                <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+            <a href="/rfqs/{{ rfq.rfq_id }}/award/export/pdf" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.75rem;" download>
+                <svg style="width: 13px; height: 13px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                 Executive Report (.pdf)
             </a>
-            <a href="/rfqs/{{ rfq.rfq_id }}/award/export/csv" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 0.4rem;" download>
-                <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            <a href="/rfqs/{{ rfq.rfq_id }}/award/export/csv" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.75rem;" download>
+                <svg style="width: 13px; height: 13px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                 ERP Allocation (.csv)
             </a>
         </div>
     </div>
 </div>
 
-<!-- Recommended Allocation from Comparison Scenario Pre-population Bar -->
-{% if award.status != 'FINALIZED' %}
-<div class="card" style="padding: 0.85rem 1.25rem; margin-bottom: 1.25rem; background: var(--bg-card); border: 1px solid var(--border-color);">
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
-        <div>
-            <div style="font-size: 0.8125rem; font-weight: 700; color: var(--text-main);">
-                Recommended allocation from Comparison:
-            </div>
-            <div style="font-size: 0.75rem; color: var(--text-muted);">
-                Pre-populate proposed allocations from comparison scenarios. You can modify quantities or split suppliers before final confirmation.
-            </div>
-        </div>
-        <div style="display: flex; gap: 0.5rem;">
-            <a href="/rfqs/{{ rfq.rfq_id }}/award?scenario=SINGLE_SUPPLIER_L1" onclick="return confirmScenarioSwitch(this.href);" class="btn {% if award.selected_scenario == 'SINGLE_SUPPLIER_L1' %}btn-primary{% else %}btn-secondary{% endif %} btn-sm">
-                Scenario A: Lowest Total Cost (Single Supplier)
-            </a>
-            <a href="/rfqs/{{ rfq.rfq_id }}/award?scenario=LINE_ITEM_OPTIMAL" onclick="return confirmScenarioSwitch(this.href);" class="btn {% if award.selected_scenario == 'LINE_ITEM_OPTIMAL' %}btn-primary{% else %}btn-secondary{% endif %} btn-sm">
-                Scenario B: Lowest Cost Per Item (Split Sourcing)
-            </a>
-        </div>
-    </div>
-</div>
-{% endif %}
-
 <!-- Form for Reviewing and Finalizing the Award Allocation -->
 <form action="/rfqs/{{ rfq.rfq_id }}/award/finalize" method="POST" id="award-form">
-    <input type="hidden" name="selected_scenario" value="{{ award.selected_scenario }}">
-    <input type="hidden" name="base_currency" value="{{ award.base_currency }}">
+    <input type="hidden" name="selected_scenario" id="selected_scenario_inp" value="{{ award.selected_scenario }}">
+    <input type="hidden" name="base_currency" id="base_currency_inp" value="{{ award.base_currency }}">
     <input type="hidden" name="allocations_json" id="allocations_json" value="">
 
     <!-- Main Award Allocation Work Area -->
     <div style="margin-bottom: 1.5rem;">
         {% for alloc in award.allocations %}
-        <div class="card alloc-line-card" data-line-id="{{ alloc.rfq_line_id }}" data-sku="{{ alloc.item_sku }}" data-desc="{{ alloc.item_description }}" data-req-qty="{{ alloc.required_qty }}" data-req-uom="{{ alloc.required_uom }}" style="margin-bottom: 1rem; padding: 1.25rem;">
-            <!-- Line Header: Item Info & Visual Quantity Fulfillment Bar -->
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 0.75rem;">
+        {% set rec = alloc.recommendation %}
+        <div class="alloc-line-card" id="line-card-{{ alloc.rfq_line_id }}" data-line-id="{{ alloc.rfq_line_id }}" data-sku="{{ alloc.item_sku }}" data-desc="{{ alloc.item_description }}" data-req-qty="{{ alloc.required_qty or '' }}" data-req-uom="{{ alloc.required_uom or 'PCS' }}" data-decision-status="{{ alloc.buyer_decision_status or '' }}" data-is-shortfall="{{ 'true' if (rec and (rec.is_supply_shortfall or rec.fulfillment_pct|float < 100)) else 'false' }}" data-has-rec="{{ 'true' if (rec and rec.recommended_splits and rec.recommended_splits|length > 0) else 'false' }}">
+            
+            <!-- SECTION 1: RFQ REQUIREMENT HEADER BANNER (DOMINANT PRODUCT IDENTITY) -->
+            <div class="line-req-header">
                 <div>
-                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem;">
-                        <code style="color: var(--accent); font-weight: 700; font-size: 0.8125rem;">{{ alloc.rfq_line_id }}</code>
-                        <strong style="color: var(--text-main); font-size: 0.9375rem;">{{ alloc.item_sku }}</strong>
-                    </div>
-                    <div style="font-size: 0.8125rem; color: var(--text-muted);">
-                        {{ alloc.item_description }}
+                    <div class="line-product-title">
+                        <span class="badge badge-secondary" style="font-size: 0.7rem; font-family: var(--font-mono); padding: 0.2rem 0.4rem;">{{ alloc.rfq_line_id }}</span>
+                        <strong style="font-size: 1.1rem; color: var(--text-main); font-weight: 800;">{{ alloc.item_sku }}</strong>
+                        <span style="color: var(--text-muted); font-size: 0.875rem;">&bull; {{ alloc.item_description }}</span>
                     </div>
                 </div>
 
-                <!-- Visual Quantity Fulfillment Tracker -->
-                <div style="text-align: right;">
-                    <div style="display: flex; align-items: center; gap: 0.75rem; font-family: var(--font-mono); font-size: 0.8125rem;">
-                        <span>Required: <strong>{{ alloc.required_qty }} {{ alloc.required_uom }}</strong></span>
-                        <span style="color: var(--border-color);">&bull;</span>
-                        <span style="color: var(--text-main);">Allocated: <strong class="line-allocated-qty-text">{{ alloc.total_allocated_qty }}</strong></span>
-                        <span style="color: var(--border-color);">&bull;</span>
-                        <span class="line-remaining-qty-text" style="color: {% if alloc.unallocated_qty == '0' %}var(--success){% else %}var(--warning){% endif %};">
-                            Remaining: <strong>{{ alloc.unallocated_qty }} {{ alloc.required_uom }}</strong>
-                        </span>
-                    </div>
-                    <div style="margin-top: 0.35rem;">
-                        <span class="line-status-badge badge {% if alloc.allocation_state == 'FULLY_ALLOCATED' %}badge-success{% elif alloc.allocation_state == 'PARTIALLY_ALLOCATED' %}badge-warning{% elif alloc.allocation_state == 'OVER_ALLOCATED' %}badge-danger{% else %}badge-muted{% endif %}">
-                            {% if alloc.allocation_state == 'FULLY_ALLOCATED' %}
-                            100% Fully Allocated
-                            {% elif alloc.allocation_state == 'PARTIALLY_ALLOCATED' %}
-                            Partially Allocated ({{ alloc.total_allocated_qty }}/{{ alloc.required_qty }} {{ alloc.required_uom }})
-                            {% elif alloc.allocation_state == 'OVER_ALLOCATED' %}
-                            Over-Allocated! Exceeds Requirement
-                            {% elif alloc.allocation_state == 'NOT_QUOTED' %}
-                            Not Quoted by any supplier
-                            {% else %}
-                            Unallocated by Buyer
-                            {% endif %}
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Supplier Splits Breakdown Table -->
-            <div style="overflow-x: auto; margin-bottom: 0.5rem;">
-                <table style="width: 100%;" class="splits-table">
-                    <thead>
-                        <tr style="background: var(--bg-primary);">
-                            <th style="min-width: 260px;">Awarded Supplier &amp; Quote Details</th>
-                            <th style="width: 140px; text-align: right;">Quoted Capacity</th>
-                            <th style="width: 160px; text-align: right;">Landed Price ({{ award.base_currency }})</th>
-                            <th style="width: 140px; text-align: right;">Awarded Quantity</th>
-                            <th style="width: 160px; text-align: right;">Award Value ({{ award.base_currency }})</th>
-                            {% if award.status != 'FINALIZED' %}
-                            <th style="width: 80px; text-align: center;">Action</th>
-                            {% endif %}
-                        </tr>
-                    </thead>
-                    <tbody class="splits-tbody">
-                        {% if alloc.supplier_splits and alloc.supplier_splits|length > 0 %}
-                            {% for split in alloc.supplier_splits %}
-                            <tr class="split-row">
-                                <td>
-                                    {% if award.status == 'FINALIZED' %}
-                                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
-                                            <div>
-                                                <strong style="color: var(--text-main);">{{ split.supplier_name }}</strong>
-                                                <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono);">{{ split.quote_id }}</div>
-                                            </div>
-                                            <a href="/rfqs/{{ rfq.rfq_id }}/award/export/requisition/{{ split.quote_id }}/pdf" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 0.2rem 0.45rem;" title="Download Supplier Requisition PDF" download>
-                                                Req PDF &darr;
-                                            </a>
-                                        </div>
-                                    {% else %}
-                                        <select class="supplier-split-select" onchange="onSplitFieldChange(this)" style="width: 100%; font-size: 0.8125rem; padding: 0.35rem 0.5rem;">
-                                            {% for bid in alloc.available_bids %}
-                                            <option value="{{ bid.supplier_id }}" data-name="{{ bid.supplier_name }}" data-quote-id="{{ bid.quote_id }}" data-price="{{ bid.unit_landed_cost }}" data-capacity="{{ bid.quoted_qty }}" data-uom="{{ bid.quoted_uom }}" {% if split.supplier_id == bid.supplier_id %}selected{% endif %}>
-                                                {{ bid.supplier_name }} &bull; ({{ award.base_currency }} {{ bid.unit_landed_cost }} / {{ bid.quoted_uom }}) {% if bid.is_l1_for_line %}[L1]{% endif %}
-                                            </option>
-                                            {% endfor %}
-                                        </select>
-                                    {% endif %}
-                                </td>
-                                <td style="text-align: right; font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted);">
-                                    <span class="split-capacity-display">{{ split.quoted_capacity or alloc.required_qty }}</span> {{ alloc.required_uom }}
-                                </td>
-                                <td style="text-align: right; font-family: var(--font-mono); font-size: 0.8125rem;">
-                                    <span class="split-price-display">{{ split.unit_landed_cost }}</span>
-                                </td>
-                                <td style="text-align: right;">
-                                    {% if award.status == 'FINALIZED' %}
-                                        <span style="font-family: var(--font-mono); font-weight: 700;">{{ split.allocated_qty }}</span>
-                                    {% else %}
-                                        <input type="number" step="any" min="0" max="{{ alloc.required_qty }}" class="split-qty-input" value="{{ split.allocated_qty }}" onchange="recalculateTotals()" onkeyup="recalculateTotals()" style="width: 100px; text-align: right; font-family: var(--font-mono); font-weight: 700; padding: 0.3rem 0.5rem; font-size: 0.8125rem;">
-                                    {% endif %}
-                                </td>
-                                <td style="text-align: right; font-family: var(--font-mono); font-weight: 700; color: var(--success);">
-                                    <span class="split-val-display">{{ split.split_value }}</span>
-                                </td>
-                                {% if award.status != 'FINALIZED' %}
-                                <td style="text-align: center;">
-                                    <button type="button" onclick="removeSplitRow(this)" class="btn btn-secondary btn-sm" style="padding: 0.2rem 0.45rem; font-size: 0.75rem; color: var(--danger);">
-                                        &times;
-                                    </button>
-                                </td>
-                                {% endif %}
-                            </tr>
-                            {% endfor %}
+                <!-- Prominent RFQ Requirement Badge with Popover -->
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 6px; padding: 0.3rem 0.65rem; display: flex; align-items: center; gap: 0.35rem;">
+                        <span style="font-size: 0.7rem; color: var(--accent); font-weight: 700; text-transform: uppercase;">RFQ Required:</span>
+                        {% if alloc.required_qty %}
+                            <strong style="font-family: var(--font-mono); font-size: 0.9375rem; color: var(--text-main);">{{ alloc.required_qty }} {{ alloc.required_uom or 'PCS' }}</strong>
                         {% else %}
-                            <!-- Empty row when unallocated -->
-                            <tr class="split-row empty-split-row">
-                                <td colspan="{% if award.status != 'FINALIZED' %}6{% else %}5{% endif %}" style="text-align: center; color: var(--text-muted); font-size: 0.8125rem; padding: 1rem;">
-                                    <em>No supplier allocated for this line item yet.</em>
-                                </td>
-                            </tr>
+                            <span class="badge badge-danger" style="font-size: 0.7rem;">RFQ quantity unavailable</span>
                         {% endif %}
-                    </tbody>
-                </table>
+                        <div class="calc-popover-wrapper">
+                            <button type="button" class="calc-info-btn" aria-label="View RFQ requirement details">ⓘ</button>
+                            <div class="calc-popover-card align-right">
+                                <div class="calc-popover-header">
+                                    <span class="calc-popover-title">RFQ Requirement Demand</span>
+                                    <span class="badge badge-primary" style="font-size: 0.65rem;">Buyer Spec</span>
+                                </div>
+                                <div class="calc-popover-row">
+                                    <span class="calc-popover-label">RFQ Line ID</span>
+                                    <span class="calc-popover-value">{{ alloc.rfq_line_id }}</span>
+                                </div>
+                                <div class="calc-popover-row">
+                                    <span class="calc-popover-label">Canonical Allocation UOM</span>
+                                    <span class="calc-popover-value">{{ alloc.required_uom or 'PCS' }}</span>
+                                </div>
+                                <div class="calc-popover-row">
+                                    <span class="calc-popover-label">Required Quantity</span>
+                                    <span class="calc-popover-value">{{ alloc.required_qty or 'Unavailable' }} {{ alloc.required_uom or 'PCS' }}</span>
+                                </div>
+                                <div class="calc-popover-source">
+                                    Authoritative buyer demand baseline. All capacity conversions and allocations map to this canonical UOM.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <!-- Add Supplier Split Action -->
-            {% if award.status != 'FINALIZED' and alloc.available_bids and alloc.available_bids|length > 0 %}
-            <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 0.5rem;">
-                <button type="button" onclick="addSupplierSplit('{{ alloc.rfq_line_id }}')" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.25rem 0.65rem;">
-                    + Add Supplier Allocation (Split Sourcing)
-                </button>
-                <div style="font-size: 0.75rem; color: var(--text-muted);">
-                    {{ alloc.available_bids|length }} competing supplier bid(s) available for this item
+            <!-- SECTION 2: AUTHORITATIVE RECOMMENDATION CARD (DOMINANT DECISION HERO) -->
+            {% if rec and rec.recommended_splits and rec.recommended_splits|length > 0 %}
+            <div class="line-recommendation-card" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.07) 0%, rgba(15, 23, 42, 0.55) 100%); padding: 1rem 1.25rem;">
+                
+                <!-- Supply Shortfall Warning Banner (if applicable) -->
+                {% if rec.is_supply_shortfall or rec.fulfillment_pct|float < 100 %}
+                <div style="background: {% if alloc.buyer_decision_status == 'PARTIAL_ACKNOWLEDGED' %}rgba(16, 185, 129, 0.12){% else %}rgba(245, 158, 11, 0.12){% endif %}; border: 1px solid {% if alloc.buyer_decision_status == 'PARTIAL_ACKNOWLEDGED' %}var(--success){% else %}var(--warning){% endif %}; border-radius: 6px; padding: 0.65rem 0.85rem; margin-bottom: 0.75rem;" id="shortfall-banner-{{ alloc.rfq_line_id }}">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 0.4rem; color: {% if alloc.buyer_decision_status == 'PARTIAL_ACKNOWLEDGED' %}var(--success){% else %}var(--warning){% endif %}; font-weight: 800; font-size: 0.75rem; text-transform: uppercase;" id="shortfall-header-{{ alloc.rfq_line_id }}">
+                                <span>{% if alloc.buyer_decision_status == 'PARTIAL_ACKNOWLEDGED' %}✓ PARTIAL AWARD ACKNOWLEDGED BY BUYER{% else %}⚠ PARTIAL FULFILLMENT — SUPPLY SHORTFALL{% endif %}</span>
+                            </div>
+                            <div style="font-size: 0.8125rem; color: var(--text-main); margin-top: 0.15rem;">
+                                <strong>{{ rec.required_qty }} {{ alloc.required_uom }}</strong> required &bull;
+                                <strong>{{ rec.aggregate_eligible_capacity or rec.total_allocated_qty }} {{ alloc.required_uom }}</strong> eligible capacity &bull;
+                                <span style="color: {% if alloc.buyer_decision_status == 'PARTIAL_ACKNOWLEDGED' %}var(--success){% else %}var(--warning){% endif %}; font-weight: 700;">{{ rec.shortfall_qty }} {{ alloc.required_uom }} shortfall ({{ rec.fulfillment_pct }}% fulfillment)</span>
+                            </div>
+                            <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.1rem;">
+                                No eligible supplier combination can satisfy the remaining {{ rec.shortfall_qty }} {{ alloc.required_uom }}.
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
+                            {% if award.status != 'FINALIZED' %}
+                            <span id="partial-action-container-{{ alloc.rfq_line_id }}">
+                                {% if alloc.buyer_decision_status == 'PARTIAL_ACKNOWLEDGED' %}
+                                <span class="badge badge-success" style="font-size: 0.75rem; padding: 0.25rem 0.55rem; font-weight: 800;">✓ Partial Accepted</span>
+                                {% else %}
+                                <button type="button" class="btn btn-warning btn-sm" onclick="openPartialAckModal('{{ alloc.rfq_line_id }}', '{{ alloc.item_sku }}', '{{ rec.required_qty }}', '{{ rec.total_allocated_qty }}', '{{ rec.shortfall_qty }}', '{{ alloc.required_uom }}', '{{ rec.fulfillment_pct }}')" style="font-size: 0.75rem; padding: 0.25rem 0.55rem; font-weight: 700;">
+                                    Accept Partial Award
+                                </button>
+                                {% endif %}
+                            </span>
+                            <button type="button" class="btn btn-secondary btn-sm" disabled title="Unavailable in current workflow — requires RFQ renegotiation round" style="font-size: 0.75rem; padding: 0.25rem 0.55rem; opacity: 0.55; cursor: not-allowed;">
+                                Seek Additional Capacity 🔒
+                            </button>
+                            {% if rec.supplier_exclusion_reasons %}
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="togglePopoverFor('eval-btn-{{ alloc.rfq_line_id }}')" style="font-size: 0.75rem; padding: 0.25rem 0.55rem;">
+                                Review Excluded Quotes &rarr;
+                            </button>
+                            {% else %}
+                            <button type="button" class="btn btn-secondary btn-sm" disabled title="No excluded supplier quotes for this line" style="font-size: 0.75rem; padding: 0.25rem 0.55rem; opacity: 0.55; cursor: not-allowed;">
+                                Review Excluded Quotes
+                            </button>
+                            {% endif %}
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
+                {% endif %}
+
+                <!-- Recommendation Header & Decision Actions -->
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.6rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                        <span class="badge {% if alloc.buyer_decision_status == 'BUYER_ACCEPTED' %}badge-buyer-accepted{% elif alloc.buyer_decision_status == 'PARTIAL_ACKNOWLEDGED' %}badge-success{% elif alloc.buyer_decision_status == 'BUYER_MODIFIED' %}badge-buyer-modified{% else %}badge-success{% endif %} rec-status-badge" id="rec-badge-{{ alloc.rfq_line_id }}" style="font-weight: 800; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.25rem 0.55rem;">
+                            {% if alloc.buyer_decision_status == 'BUYER_ACCEPTED' %}
+                                ✓ BUYER ACCEPTED
+                            {% elif alloc.buyer_decision_status == 'PARTIAL_ACKNOWLEDGED' %}
+                                ✓ PARTIAL AWARD ACCEPTED
+                            {% elif alloc.buyer_decision_status == 'BUYER_MODIFIED' %}
+                                BUYER MODIFIED
+                            {% else %}
+                                ★ RECOMMENDED ALLOCATION
+                            {% endif %}
+                        </span>
+                        <span class="rec-accepted-note" id="rec-note-{{ alloc.rfq_line_id }}" style="font-size: 0.75rem; color: var(--success); font-weight: 600; display: {% if alloc.buyer_decision_status == 'BUYER_ACCEPTED' %}inline{% else %}none{% endif %};">
+                            System recommendation accepted.
+                        </span>
+                        <strong style="font-size: 0.9375rem; color: var(--text-main);">
+                            {{ rec.strategy_label or 'Cost Optimized' }} &bull;
+                            {% if rec.recommended_option_type == 'SPLIT_SOURCING' %}
+                                Split Sourcing ({{ rec.recommended_splits|length }} suppliers)
+                            {% elif rec.recommended_option_type == 'SINGLE_SUPPLIER' %}
+                                Single Sourcing
+                            {% else %}
+                                Partial Fulfillment
+                            {% endif %}
+                        </strong>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+                        <!-- WHY RECOMMENDED POPOVER -->
+                        {% set all_alts = (rec.full_fulfillment_options or []) + (rec.partial_fulfillment_options or []) %}
+                        <div class="calc-popover-wrapper">
+                            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.25rem 0.55rem;" aria-label="Why this recommendation?">
+                                <span style="color: var(--accent); font-weight: 800;">ⓘ</span> Why this recommendation?
+                            </button>
+                            <div class="calc-popover-card align-right" style="width: 400px;">
+                                <div class="calc-popover-header">
+                                    <span class="calc-popover-title">Optimization Evidence &amp; Rationale</span>
+                                    <span class="badge badge-success" style="font-size: 0.65rem;">Engine Proof</span>
+                                </div>
+                                <div style="margin-bottom: 0.45rem;">
+                                    <div style="font-size: 0.6875rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Objective:</div>
+                                    <div style="font-size: 0.8125rem; font-weight: 700; color: var(--text-main);">
+                                        {{ rec.why_recommended_breakdown.core_objective or rec.strategy_label or 'Lowest Total Landed Procurement Cost' }}
+                                    </div>
+                                </div>
+                                <div style="margin-bottom: 0.45rem;">
+                                    <div style="font-size: 0.6875rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; margin-bottom: 0.15rem;">Feasibility Verifications:</div>
+                                    <div style="font-size: 0.75rem; color: var(--success); margin-bottom: 0.1rem;">✓ Specification compliant</div>
+                                    <div style="font-size: 0.75rem; color: var(--success); margin-bottom: 0.1rem;">✓ Dimension-safe UOM conversion ({{ alloc.required_uom }})</div>
+                                    <div style="font-size: 0.75rem; color: var(--success); margin-bottom: 0.1rem;">✓ Verified eligible suppliers</div>
+                                    <div style="font-size: 0.75rem; color: {% if rec.is_supply_shortfall %}var(--warning){% else %}var(--success){% endif %}; margin-bottom: 0.1rem;">
+                                        {% if rec.is_supply_shortfall %}⚠ Supply capacity bounded ({{ rec.aggregate_eligible_capacity }} {{ alloc.required_uom }}){% else %}✓ Capacity constraint fully satisfied{% endif %}
+                                    </div>
+                                </div>
+                                <div style="margin-bottom: 0.45rem; border-top: 1px dashed var(--border-color); padding-top: 0.35rem;">
+                                    <div style="font-size: 0.6875rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; margin-bottom: 0.15rem;">Allocation Basis:</div>
+                                    {% for sp in rec.recommended_splits %}
+                                    <div style="font-size: 0.75rem; color: var(--text-main); display: flex; justify-content: space-between;">
+                                        <span>{{ sp.supplier_name }} &rarr; <strong>{{ sp.awarded_qty }} {{ alloc.required_uom }}</strong></span>
+                                        <span style="font-family: var(--font-mono);">{{ award.base_currency }} {{ "%.2f"|format(sp.unit_landed_cost|float) }}</span>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% if all_alts and all_alts|length > 1 %}
+                                <div style="margin-bottom: 0.45rem; border-top: 1px dashed var(--border-color); padding-top: 0.35rem;">
+                                    <div style="font-size: 0.6875rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; margin-bottom: 0.15rem;">Price Comparison vs Alternatives:</div>
+                                    <div style="font-size: 0.75rem; display: flex; justify-content: space-between;">
+                                        <span style="color: var(--text-muted);">Recommended:</span>
+                                        <strong style="color: var(--success); font-family: var(--font-mono);">{{ award.base_currency }} {{ "%.2f"|format(rec.total_line_value|float) }}</strong>
+                                    </div>
+                                    <div style="font-size: 0.75rem; display: flex; justify-content: space-between;">
+                                        <span style="color: var(--text-muted);">Best Alternative ({{ all_alts[1].title }}):</span>
+                                        <strong style="font-family: var(--font-mono);">{{ award.base_currency }} {{ "%.2f"|format(all_alts[1].total_line_value|float) }}</strong>
+                                    </div>
+                                    {% if all_alts[1].cost_delta_vs_recommended|float > 0 %}
+                                    <div style="font-size: 0.75rem; display: flex; justify-content: space-between; color: var(--success); font-weight: 700;">
+                                        <span>Savings Advantage:</span>
+                                        <span>+{{ award.base_currency }} {{ "%.2f"|format(all_alts[1].cost_delta_vs_recommended|float) }}</span>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                                <div class="calc-popover-source">
+                                    Authority: Sourcing Optimizer &bull; Canonical Server Evaluation Baseline.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SUPPLIER EVALUATION REASONS POPOVER -->
+                        {% if rec.supplier_exclusion_reasons %}
+                        <div class="calc-popover-wrapper">
+                            <button type="button" id="eval-btn-{{ alloc.rfq_line_id }}" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.25rem 0.55rem;" aria-label="View supplier selection and exclusion reasons">
+                                Supplier Evaluations ▾
+                            </button>
+                            <div class="calc-popover-card align-right" style="width: 420px;">
+                                <div class="calc-popover-header">
+                                    <span class="calc-popover-title">Supplier Selection &amp; Exclusion Analysis</span>
+                                    <span class="badge badge-info" style="font-size: 0.65rem;">Audit Trail</span>
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 260px; overflow-y: auto;">
+                                    {% for s_id, ex in rec.supplier_exclusion_reasons.items() %}
+                                    <div style="background: var(--bg-card-subtle); border: 1px solid var(--border-subtle); border-radius: 4px; padding: 0.35rem 0.5rem;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.15rem;">
+                                            <strong style="font-size: 0.78125rem; color: var(--text-main);">{{ ex.supplier_name }}</strong>
+                                            <span class="badge {{ ex.badge_class }}" style="font-size: 0.65rem;">{{ ex.badge_label }}</span>
+                                        </div>
+                                        <div style="font-size: 0.7rem; color: var(--text-muted);">
+                                            <strong>{{ ex.reason }}:</strong> {{ ex.details }}
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Dynamic Action Button Area -->
+                        {% if award.status != 'FINALIZED' %}
+                        <span id="line-action-container-{{ alloc.rfq_line_id }}">
+                            {% if alloc.buyer_decision_status == 'BUYER_ACCEPTED' %}
+                            <span class="badge badge-buyer-accepted" style="font-size: 0.75rem; padding: 0.25rem 0.55rem; font-weight: 800;">✓ Accepted</span>
+                            {% else %}
+                            <button type="button" class="btn btn-success btn-sm" onclick="acceptRecommendationForLine('{{ alloc.rfq_line_id }}')" style="font-size: 0.75rem; padding: 0.25rem 0.65rem; font-weight: 800;">
+                                Accept Recommendation
+                            </button>
+                            {% endif %}
+                        </span>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="toggleSplitsDrawer('{{ alloc.rfq_line_id }}')" id="adjust-btn-{{ alloc.rfq_line_id }}" style="font-size: 0.75rem; padding: 0.25rem 0.65rem;">
+                            Adjust Allocation ▾
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Dominant Recommended Supplier Leads with Price Breakdown Popovers -->
+                <div style="margin-bottom: 0.6rem;">
+                    {% for sp in rec.recommended_splits %}
+                    <div style="font-size: 0.9375rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.25rem; display: flex; align-items: center; flex-wrap: wrap;">
+                        <span>{{ sp.supplier_name }} &rarr; <span style="font-family: var(--font-mono); color: var(--accent);">{{ sp.awarded_qty }} {{ alloc.required_uom }}</span></span>
+                        <span style="font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); margin-left: 0.4rem;">@ {{ award.base_currency }} {{ "%.2f"|format(sp.unit_landed_cost|float) }}/{{ alloc.required_uom }}</span>
+
+                        <!-- Canonical Price Breakdown Popover Component -->
+                        <div class="calc-popover-wrapper">
+                            <button type="button" class="calc-info-btn" aria-label="View price breakdown for {{ sp.supplier_name }}">ⓘ</button>
+                            <div class="calc-popover-card align-left" style="width: 320px;">
+                                <div class="calc-popover-header">
+                                    <span class="calc-popover-title">Price Breakdown</span>
+                                    <span class="badge badge-success" style="font-size: 0.65rem;">Canonical</span>
+                                </div>
+                                <div class="calc-popover-row">
+                                    <span class="calc-popover-label">Supplier</span>
+                                    <span class="calc-popover-value">{{ sp.supplier_name }}</span>
+                                </div>
+                                <div class="calc-popover-row">
+                                    <span class="calc-popover-label">Allocated Quantity</span>
+                                    <span class="calc-popover-value">{{ sp.awarded_qty }} {{ alloc.required_uom }}</span>
+                                </div>
+                                <div class="calc-popover-row">
+                                    <span class="calc-popover-label">Base Unit Price</span>
+                                    <span class="calc-popover-value">{{ award.base_currency }} {{ sp.base_unit_price or sp.unit_landed_cost }} / {{ alloc.required_uom }}</span>
+                                </div>
+                                <div class="calc-popover-row" style="border-top: 1px dashed var(--border-color); padding-top: 0.25rem; margin-top: 0.25rem;">
+                                    <span class="calc-popover-label">Subtotal</span>
+                                    <span class="calc-popover-value">{{ award.base_currency }} {{ "%.2f"|format((sp.awarded_qty|float) * ((sp.base_unit_price or sp.unit_landed_cost)|float)) }}</span>
+                                </div>
+                                <div class="calc-popover-row">
+                                    <span class="calc-popover-label">Discount</span>
+                                    <span class="calc-popover-value" style="color: {% if sp.discount_pct and sp.discount_pct not in ['0', '0.0', '0.00'] %}var(--success){% else %}var(--text-muted){% endif %};">
+                                        {% if sp.discount_pct and sp.discount_pct not in ['0', '0.0', '0.00'] %}&minus;{{ sp.discount_pct }}%{% else %}Not provided{% endif %}
+                                    </span>
+                                </div>
+                                <div class="calc-popover-row">
+                                    <span class="calc-popover-label">Taxes (GST)</span>
+                                    <span class="calc-popover-value">
+                                        {% if sp.tax_amount and sp.tax_amount not in ['0', '0.0', '0.00'] %}+{{ award.base_currency }} {{ sp.tax_amount }} ({{ sp.tax_rate_pct or '0' }}%){% else %}<span style="color: var(--text-muted); font-size: 0.75rem;">Not provided</span>{% endif %}
+                                    </span>
+                                </div>
+                                <div class="calc-popover-row">
+                                    <span class="calc-popover-label">Freight / Other Charges</span>
+                                    <span class="calc-popover-value">
+                                        {% if sp.allocated_charges and sp.allocated_charges not in ['0', '0.0', '0.00'] %}+{{ award.base_currency }} {{ sp.allocated_charges }}{% else %}<span style="color: var(--text-muted); font-size: 0.75rem;">Not provided</span>{% endif %}
+                                    </span>
+                                </div>
+                                <div class="calc-popover-row calc-popover-total">
+                                    <span>Final Landed Value</span>
+                                    <span>{{ award.base_currency }} {{ "%.2f"|format(sp.split_value|float) }}</span>
+                                </div>
+                                <div class="calc-popover-row" style="font-size: 0.75rem; color: var(--accent); font-weight: 700;">
+                                    <span>Landed Unit Price</span>
+                                    <span>{{ award.base_currency }} {{ "%.2f"|format(sp.unit_landed_cost|float) }} / {{ alloc.required_uom }}</span>
+                                </div>
+                                <div class="calc-popover-source">
+                                    Derived from Commercial Normalization Engine. No estimated components.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    <div style="font-size: 0.78125rem; color: var(--text-muted); margin-top: 0.2rem;">
+                        {{ rec.rationale }}
+                    </div>
+                </div>
+
+                <!-- Clean Key Metrics Strip with Split Price Basis Popover -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.4rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.5rem 0.75rem; text-align: center;">
+                    <div>
+                        <div style="font-size: 0.65rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Required</div>
+                        <div style="font-size: 0.875rem; font-weight: 800; font-family: var(--font-mono); color: var(--text-main);">
+                            {{ rec.required_qty or 'N/A' }} {{ alloc.required_uom }}
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.65rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Awarded</div>
+                        <div style="font-size: 0.875rem; font-weight: 800; font-family: var(--font-mono); color: var(--accent);">
+                            {{ rec.total_allocated_qty }} {{ alloc.required_uom }}
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.65rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Unfulfilled</div>
+                        <div style="font-size: 0.875rem; font-weight: 800; font-family: var(--font-mono); color: {% if rec.remaining_qty|float == 0 %}var(--success){% else %}var(--warning){% endif %};">
+                            {{ rec.remaining_qty }} {{ alloc.required_uom }}
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.65rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Fulfillment</div>
+                        <div style="font-size: 0.875rem; font-weight: 800; font-family: var(--font-mono); color: {% if rec.fulfillment_pct|float >= 100 %}var(--success){% else %}var(--warning){% endif %};">
+                            {{ rec.fulfillment_pct }}%
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.65rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600; display: flex; align-items: center; justify-content: center;">
+                            <span>Total Award Value</span>
+                            <!-- Split Sourcing Price Basis Popover -->
+                            <div class="calc-popover-wrapper">
+                                <button type="button" class="calc-info-btn" aria-label="View split sourcing price basis">ⓘ</button>
+                                <div class="calc-popover-card align-right" style="width: 340px;">
+                                    <div class="calc-popover-header">
+                                        <span class="calc-popover-title">Split Sourcing &bull; Price Basis</span>
+                                        <span class="badge badge-info" style="font-size: 0.65rem;">Composition</span>
+                                    </div>
+                                    <div style="margin-bottom: 0.4rem;">
+                                        {% for s in rec.recommended_splits %}
+                                        <div class="calc-popover-row">
+                                            <span class="calc-popover-label">{{ s.supplier_name }} ({{ s.awarded_qty }} {{ alloc.required_uom }} &times; {{ award.base_currency }} {{ "%.2f"|format(s.unit_landed_cost|float) }})</span>
+                                            <span class="calc-popover-value">{{ award.base_currency }} {{ "%.2f"|format(s.split_value|float) }}</span>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="calc-popover-row calc-popover-total">
+                                        <span>Total Award Value</span>
+                                        <span>{{ award.base_currency }} {{ "%.2f"|format(rec.total_line_value|float) }}</span>
+                                    </div>
+                                    <div class="calc-popover-row" style="color: var(--accent); font-weight: 700; font-size: 0.75rem;">
+                                        <span>Effective Blended Unit Cost</span>
+                                        <span>{{ award.base_currency }} {{ "%.2f"|format((rec.total_line_value|float / rec.total_allocated_qty|float) if rec.total_allocated_qty|float > 0 else 0) }} / {{ alloc.required_uom }}</span>
+                                    </div>
+                                    {% if all_alts and all_alts|length > 1 %}
+                                    <div style="margin-top: 0.4rem; border-top: 1px dashed var(--border-color); padding-top: 0.35rem;">
+                                        <div class="calc-popover-row" style="font-size: 0.75rem;">
+                                            <span class="calc-popover-label">{{ all_alts[1].title }}</span>
+                                            <span class="calc-popover-value">{{ award.base_currency }} {{ "%.2f"|format(all_alts[1].total_line_value|float) }}</span>
+                                        </div>
+                                        <div class="calc-popover-row" style="font-size: 0.75rem; color: var(--success);">
+                                            <span>Difference vs Split</span>
+                                            <span>+{{ award.base_currency }} {{ "%.2f"|format(all_alts[1].cost_delta_vs_recommended|float) }}</span>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div style="font-size: 0.9375rem; font-weight: 800; font-family: var(--font-mono); color: var(--success);">
+                            {{ award.base_currency }} {{ "%.2f"|format(rec.total_line_value|float) }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 2B: COMPACT RANKED ALTERNATIVES -->
+                {% if all_alts and all_alts|length > 1 %}
+                <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 0.5rem; margin-top: 0.6rem;">
+                    <div style="font-size: 0.6875rem; font-weight: 800; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.04em; margin-bottom: 0.3rem;">
+                        Ranked Allocation Alternatives:
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.4rem;">
+                        {% for alt in all_alts %}
+                        <div style="background: {% if alt.is_recommended %}rgba(16, 185, 129, 0.12){% else %}var(--bg-card-subtle){% endif %}; border: 1px solid {% if alt.is_recommended %}var(--success){% else %}var(--border-subtle){% endif %}; border-radius: 6px; padding: 0.4rem 0.6rem; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="display: flex; align-items: center; gap: 0.35rem;">
+                                    <strong style="font-size: 0.75rem; color: var(--text-main);">{{ alt.title }}</strong>
+                                    {% if alt.is_recommended %}
+                                    <span class="badge badge-success" style="font-size: 0.6rem; padding: 0.1rem 0.3rem;">RECOMMENDED</span>
+                                    {% elif alt.fulfillment_pct|float < 100 %}
+                                    <span class="badge badge-warning" style="font-size: 0.6rem; padding: 0.1rem 0.3rem;">PARTIAL &bull; {{ alt.fulfillment_pct }}%</span>
+                                    {% else %}
+                                    <span class="badge badge-secondary" style="font-size: 0.6rem; padding: 0.1rem 0.3rem;">100%</span>
+                                    {% endif %}
+                                </div>
+                                <div style="font-size: 0.6875rem; color: var(--text-muted); margin-top: 0.1rem;">
+                                    {{ award.base_currency }} {{ "%.2f"|format(alt.total_line_value|float) }}
+                                    {% if not alt.is_recommended %}
+                                        {% if alt.cost_delta_vs_recommended|float > 0 %}
+                                        &bull; <span style="color: var(--warning); font-weight: 600;">+{{ award.base_currency }} {{ "%.2f"|format(alt.cost_delta_vs_recommended|float) }}</span>
+                                        {% elif alt.cost_delta_vs_recommended|float < 0 %}
+                                        &bull; <span style="color: var(--success); font-weight: 600;">-{{ award.base_currency }} {{ "%.2f"|format((alt.cost_delta_vs_recommended|float)|abs) }}</span>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            {% if award.status != 'FINALIZED' and not alt.is_recommended %}
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="applyAlternativeToLine('{{ alloc.rfq_line_id }}', {{ loop.index0 }})" style="font-size: 0.65rem; padding: 0.15rem 0.4rem;">
+                                Apply Option
+                            </button>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
             </div>
             {% endif %}
 
-            <!-- Template for available bids in JSON for JS dynamic adding -->
+            <!-- SECTION 3: COLLAPSED-BY-DEFAULT ALLOCATION DETAILS DRAWER -->
+            <div class="line-splits-drawer" id="splits-drawer-{{ alloc.rfq_line_id }}" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+                    <div style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.04em;">
+                        Allocation Adjustments &amp; Capacity Controls
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <button type="button" class="btn btn-secondary btn-xs" onclick="resetToRecommendation('{{ alloc.rfq_line_id }}')" style="font-size: 0.7rem; padding: 0.15rem 0.45rem;">
+                            ↺ Reset to Recommendation
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-xs" onclick="toggleSplitsDrawer('{{ alloc.rfq_line_id }}')" style="font-size: 0.7rem; padding: 0.15rem 0.45rem;">
+                            Collapse ▲
+                        </button>
+                    </div>
+                </div>
+
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse;" class="splits-table">
+                        <thead>
+                            <tr style="background: var(--bg-card); border-bottom: 1px solid var(--border-color); font-size: 0.75rem; text-align: left; color: var(--text-muted);">
+                                <th style="min-width: 220px; padding: 0.45rem 0.6rem;">Supplier &amp; Quote</th>
+                                <th style="width: 150px; text-align: right; padding: 0.45rem 0.6rem;">Available Capacity</th>
+                                <th style="width: 130px; text-align: right; padding: 0.45rem 0.6rem;">Landed Unit Price</th>
+                                <th style="width: 150px; text-align: right; padding: 0.45rem 0.6rem;">Awarded Qty</th>
+                                <th style="width: 140px; text-align: right; padding: 0.45rem 0.6rem;">Award Value ({{ award.base_currency }})</th>
+                                {% if award.status != 'FINALIZED' %}
+                                <th style="width: 45px; text-align: center; padding: 0.45rem 0.6rem;">Action</th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody class="splits-tbody">
+                            {% if alloc.supplier_splits and alloc.supplier_splits|length > 0 %}
+                                {% for split in alloc.supplier_splits %}
+                                <tr class="split-row" style="border-bottom: 1px solid rgba(255,255,255,0.05);" data-supplier-id="{{ split.supplier_id }}">
+                                    <td style="padding: 0.45rem 0.6rem;">
+                                        {% if award.status == 'FINALIZED' %}
+                                            <div>
+                                                <strong style="color: var(--text-main); font-size: 0.8125rem;">{{ split.supplier_name }}</strong>
+                                                <div class="secondary-provenance">Quote: {{ split.quote_id }}</div>
+                                            </div>
+                                        {% else %}
+                                            <select class="supplier-split-select" onchange="onSplitFieldChange(this)" style="width: 100%; font-size: 0.78125rem; padding: 0.3rem 0.45rem; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
+                                                {% for bid in alloc.available_bids %}
+                                                <option value="{{ bid.supplier_id }}" 
+                                                        data-name="{{ bid.supplier_name }}" 
+                                                        data-quote-id="{{ bid.quote_id }}" 
+                                                        data-price="{{ bid.unit_landed_cost }}" 
+                                                        data-capacity="{{ bid.supplier_quoted_qty or bid.quoted_qty or '' }}" 
+                                                        data-uom="{{ bid.supplier_quoted_uom or bid.quoted_uom or alloc.required_uom or 'PCS' }}"
+                                                        data-converted-capacity="{{ bid.converted_capacity or bid.supplier_quoted_qty or bid.quoted_qty or '' }}"
+                                                        data-converted-uom="{{ alloc.required_uom or 'PCS' }}"
+                                                        data-uom-factor="{{ bid.uom_conversion_factor or '1.0' }}"
+                                                        data-uom-formula="{{ bid.uom_conversion_formula or '' }}"
+                                                        data-base-price="{{ bid.base_unit_price or bid.unit_landed_cost }}"
+                                                        data-discount-pct="{{ bid.discount_pct or '' }}"
+                                                        data-tax-amount="{{ bid.tax_amount or '' }}"
+                                                        data-tax-pct="{{ bid.tax_rate_pct or '' }}"
+                                                        data-charges="{{ bid.allocated_charges or '' }}"
+                                                        {% if split.supplier_id == bid.supplier_id %}selected{% endif %}>
+                                                    {{ bid.supplier_name }} &bull; ({{ award.base_currency }} {{ "%.2f"|format(bid.unit_landed_cost|float) }} / {{ alloc.required_uom or 'PCS' }}) {% if bid.is_l1_for_line %}[L1 Optimal]{% endif %}
+                                                </option>
+                                                {% endfor %}
+                                            </select>
+                                        {% endif %}
+                                    </td>
+
+                                    <!-- Available Capacity in Converted RFQ UOM with Popover -->
+                                    <td style="text-align: right; font-family: var(--font-mono); font-size: 0.78125rem; color: var(--text-muted); padding: 0.45rem 0.6rem;">
+                                        <div style="display: inline-flex; align-items: center; justify-content: flex-end;">
+                                            <span class="split-capacity-display" style="font-weight: 700; color: var(--text-main);">
+                                                {{ split.converted_capacity or split.supplier_quoted_qty or split.quoted_capacity or 'Unavailable' }}
+                                            </span>
+                                            <span class="split-capacity-uom-display" style="margin-left: 0.25rem;">{{ alloc.required_uom or 'PCS' }}</span>
+                                            
+                                            <div class="calc-popover-wrapper">
+                                                <button type="button" class="calc-info-btn" aria-label="View supplier capacity details">ⓘ</button>
+                                                <div class="calc-popover-card">
+                                                    <div class="calc-popover-header">
+                                                        <span class="calc-popover-title">Supplier Quoted Capacity</span>
+                                                        <span class="badge badge-info" style="font-size: 0.65rem;">Provenance</span>
+                                                    </div>
+                                                    <div class="calc-popover-row">
+                                                        <span class="calc-popover-label">Supplier</span>
+                                                        <span class="calc-popover-value">{{ split.supplier_name }}</span>
+                                                    </div>
+                                                    <div class="calc-popover-row">
+                                                        <span class="calc-popover-label">Original Quoted Bid</span>
+                                                        <span class="calc-popover-value">{{ split.supplier_quoted_qty or 'N/A' }} {{ split.supplier_quoted_uom or split.quoted_uom or alloc.required_uom }}</span>
+                                                    </div>
+                                                    {% if split.uom_conversion_formula %}
+                                                    <div class="calc-popover-row">
+                                                        <span class="calc-popover-label">UOM Conversion</span>
+                                                        <span class="calc-popover-value" style="color: var(--accent);">{{ split.uom_conversion_formula }}</span>
+                                                    </div>
+                                                    {% endif %}
+                                                    <div class="calc-popover-row calc-popover-total">
+                                                        <span>= Converted Capacity</span>
+                                                        <span>{{ split.converted_capacity or split.supplier_quoted_qty or 'N/A' }} {{ alloc.required_uom }}</span>
+                                                    </div>
+                                                    <div class="calc-popover-row">
+                                                        <span class="calc-popover-label">Unused Capacity</span>
+                                                        <span class="calc-popover-value">{{ split.unused_converted_qty or split.unused_quote_qty or '0' }} {{ alloc.required_uom }}</span>
+                                                    </div>
+                                                    <div class="calc-popover-source">
+                                                        Calculated deterministically via UOMResolver. Max allowable award cannot exceed converted capacity.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% if split.supplier_quoted_uom and split.supplier_quoted_uom != alloc.required_uom %}
+                                        <div class="secondary-provenance">Quoted: {{ split.supplier_quoted_qty }} {{ split.supplier_quoted_uom }}</div>
+                                        {% endif %}
+                                    </td>
+
+                                    <!-- Landed Unit Price with Popover -->
+                                    <td style="text-align: right; font-family: var(--font-mono); font-size: 0.78125rem; padding: 0.45rem 0.6rem;">
+                                        <div style="display: inline-flex; align-items: center; justify-content: flex-end;">
+                                            <span class="split-price-display" style="font-weight: 700; color: var(--text-main);">{{ "%.2f"|format(split.unit_landed_cost|float) }}</span>
+                                            <div class="calc-popover-wrapper">
+                                                <button type="button" class="calc-info-btn" aria-label="View landed price breakdown">ⓘ</button>
+                                                <div class="calc-popover-card">
+                                                    <div class="calc-popover-header">
+                                                        <span class="calc-popover-title">Landed Price Breakdown</span>
+                                                        <span class="badge badge-success" style="font-size: 0.65rem;">Authoritative</span>
+                                                    </div>
+                                                    <div class="calc-popover-row">
+                                                        <span class="calc-popover-label">Base Unit Price</span>
+                                                        <span class="calc-popover-value">{{ award.base_currency }} {{ split.base_unit_price or split.unit_landed_cost }}</span>
+                                                    </div>
+                                                    <div class="calc-popover-row">
+                                                        <span class="calc-popover-label">Discount Applied</span>
+                                                        <span class="calc-popover-value" style="color: {% if split.discount_pct and split.discount_pct not in ['0', '0.0', '0.00'] %}var(--success){% else %}var(--text-muted){% endif %};">
+                                                            {% if split.discount_pct and split.discount_pct not in ['0', '0.0', '0.00'] %}&minus;{{ split.discount_pct }}%{% else %}Not provided{% endif %}
+                                                        </span>
+                                                    </div>
+                                                    <div class="calc-popover-row">
+                                                        <span class="calc-popover-label">Taxes (GST)</span>
+                                                        <span class="calc-popover-value">
+                                                            {% if split.tax_amount and split.tax_amount not in ['0', '0.0', '0.00'] %}+{{ award.base_currency }} {{ split.tax_amount }} ({{ split.tax_rate_pct or '0' }}%){% else %}<span style="color: var(--text-muted); font-size: 0.75rem;">Not provided</span>{% endif %}
+                                                        </span>
+                                                    </div>
+                                                    <div class="calc-popover-row">
+                                                        <span class="calc-popover-label">Allocated Freight &amp; Charges</span>
+                                                        <span class="calc-popover-value">
+                                                            {% if split.allocated_charges and split.allocated_charges not in ['0', '0.0', '0.00'] %}+{{ award.base_currency }} {{ split.allocated_charges }}{% else %}<span style="color: var(--text-muted); font-size: 0.75rem;">Not provided</span>{% endif %}
+                                                        </span>
+                                                    </div>
+                                                    <div class="calc-popover-row calc-popover-total">
+                                                        <span>= Landed Unit Price</span>
+                                                        <span>{{ award.base_currency }} {{ "%.2f"|format(split.unit_landed_cost|float) }} / {{ alloc.required_uom or 'unit' }}</span>
+                                                    </div>
+                                                    <div class="calc-popover-source">
+                                                        Source: Commercial Normalization Engine &bull; Quote {{ split.quote_id }}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <!-- Awarded Quantity Input with Converted Capacity Ceiling -->
+                                    <td style="text-align: right; padding: 0.45rem 0.6rem;">
+                                        {% if award.status == 'FINALIZED' %}
+                                            <span style="font-family: var(--font-mono); font-weight: 800; font-size: 0.875rem; color: var(--text-main);">{{ split.allocated_qty }} {{ alloc.required_uom or '' }}</span>
+                                        {% else %}
+                                            <div style="display: flex; flex-direction: column; align-items: flex-end;">
+                                                <input type="number" 
+                                                       step="any" 
+                                                       min="0" 
+                                                       class="split-qty-input" 
+                                                       value="{{ split.allocated_qty }}" 
+                                                       oninput="onAwardQtyInput(this)" 
+                                                       onchange="onAwardQtyChange(this)" 
+                                                       {% if not alloc.required_qty %}disabled{% endif %}
+                                                       style="width: 105px; text-align: right; font-family: var(--font-mono); font-weight: 800; padding: 0.3rem 0.45rem; font-size: 0.8125rem; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-input); color: var(--text-main);">
+                                                
+                                                <div class="qty-constraint-hint">
+                                                    Max: <span class="max-allocatable-span">{{ split.converted_capacity or split.supplier_quoted_qty or alloc.required_qty or '0' }}</span> {{ alloc.required_uom or '' }}
+                                                </div>
+                                            </div>
+                                        {% endif %}
+                                    </td>
+
+                                    <!-- Award Value with Popover -->
+                                    <td style="text-align: right; font-family: var(--font-mono); font-weight: 800; color: var(--success); padding: 0.45rem 0.6rem;">
+                                        <div style="display: inline-flex; align-items: center; justify-content: flex-end;">
+                                            <span class="split-val-display">{{ "%.2f"|format(split.split_value|float) }}</span>
+                                            <div class="calc-popover-wrapper">
+                                                <button type="button" class="calc-info-btn" aria-label="View award value formula">ⓘ</button>
+                                                <div class="calc-popover-card align-right">
+                                                    <div class="calc-popover-header">
+                                                        <span class="calc-popover-title">Award Value Calculation</span>
+                                                        <span class="badge badge-success" style="font-size: 0.65rem;">Financial</span>
+                                                    </div>
+                                                    <div class="calc-popover-row">
+                                                        <span class="calc-popover-label">Awarded Quantity</span>
+                                                        <span class="calc-popover-value">{{ split.allocated_qty }} {{ alloc.required_uom or '' }}</span>
+                                                    </div>
+                                                    <div class="calc-popover-row">
+                                                        <span class="calc-popover-label">&times; Landed Unit Price</span>
+                                                        <span class="calc-popover-value">{{ award.base_currency }} {{ "%.2f"|format(split.unit_landed_cost|float) }}</span>
+                                                    </div>
+                                                    <div class="calc-popover-row calc-popover-total">
+                                                        <span>= Total Value</span>
+                                                        <span>{{ award.base_currency }} {{ "%.2f"|format(split.split_value|float) }}</span>
+                                                    </div>
+                                                    <div class="calc-popover-source">
+                                                        Deterministic Decimal arithmetic &bull; No rounding artifacts.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    {% if award.status != 'FINALIZED' %}
+                                    <td style="text-align: center; padding: 0.45rem 0.6rem;">
+                                        <button type="button" onclick="removeSplitRow(this)" class="btn btn-secondary btn-sm" style="padding: 0.15rem 0.4rem; font-size: 0.75rem; color: var(--danger);" title="Remove this supplier allocation">
+                                            &times;
+                                        </button>
+                                    </td>
+                                    {% endif %}
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr class="split-row empty-split-row">
+                                    <td colspan="{% if award.status != 'FINALIZED' %}6{% else %}5{% endif %}" style="text-align: center; color: var(--text-muted); font-size: 0.8125rem; padding: 1.25rem;">
+                                        <em>No supplier allocated for this line item yet. Click below to add an allocation.</em>
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Add Supplier Split Action Button -->
+                {% if award.status != 'FINALIZED' and alloc.available_bids and alloc.available_bids|length > 0 %}
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 0.6rem;">
+                    <button type="button" onclick="addSupplierSplit('{{ alloc.rfq_line_id }}')" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.25rem 0.65rem; font-weight: 700;">
+                        + Add Supplier Allocation
+                    </button>
+                    <div style="font-size: 0.7rem; color: var(--text-muted);">
+                        Allocations bounded by converted supplier capacity and RFQ requirement ceiling
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- SECTION 4: LINE FULFILLMENT SUMMARY BAR (DEFAULT VISIBLE STRIP WITH TOGGLE) -->
+            <div class="line-fulfillment-footer">
+                <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-secondary btn-xs" onclick="toggleSplitsDrawer('{{ alloc.rfq_line_id }}')" id="footer-toggle-btn-{{ alloc.rfq_line_id }}" style="font-size: 0.75rem; padding: 0.2rem 0.5rem; font-weight: 700;">
+                        Allocation Details ▾
+                    </button>
+                    <div style="display: flex; align-items: center;">
+                        <div class="progress-track">
+                            <div class="progress-fill" style="width: {{ alloc.fulfillment_pct or '0' }}%;"></div>
+                        </div>
+                        <strong class="line-fulfillment-pct-text" style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-main);">
+                            {{ alloc.fulfillment_pct or '0' }}%
+                        </strong>
+                    </div>
+                    <span style="color: var(--border-color);">&bull;</span>
+                    <div>
+                        <span style="font-size: 0.78125rem; color: var(--text-muted);">
+                            Allocated: <strong class="line-allocated-qty-text" style="color: var(--text-main);">{{ alloc.total_allocated_qty }} / {{ alloc.required_qty or 'N/A' }} {{ alloc.required_uom or 'PCS' }}</strong>
+                        </span>
+                    </div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 0.6rem;">
+                    <span class="line-remaining-demand-text" style="font-family: var(--font-mono); font-size: 0.78125rem; font-weight: 700; color: {% if alloc.remaining_qty == '0' or alloc.unallocated_qty == '0' %}var(--success){% else %}var(--warning){% endif %};">
+                        {% if alloc.remaining_qty == '0' or alloc.unallocated_qty == '0' %}
+                            0 {{ alloc.required_uom or 'units' }} Remaining &bull; Fully Fulfilled
+                        {% elif alloc.required_qty %}
+                            {{ alloc.remaining_qty or alloc.unallocated_qty }} {{ alloc.required_uom or 'units' }} still required (Shortfall)
+                        {% else %}
+                            RFQ Quantity Unavailable
+                        {% endif %}
+                    </span>
+                    <span class="line-status-badge badge {% if alloc.allocation_state == 'FULLY_ALLOCATED' or alloc.allocation_state == 'FULLY_FULFILLED' %}badge-success{% elif alloc.allocation_state == 'PARTIALLY_ALLOCATED' or alloc.allocation_state == 'PARTIALLY_FULFILLED' %}badge-warning{% else %}badge-muted{% endif %}" style="font-size: 0.7rem;">
+                        {{ alloc.allocation_state }}
+                    </span>
+                </div>
+            </div>
+
+            <!-- Bids JSON for Client-Side JS Dynamic Sourcing -->
             <script type="application/json" id="bids-data-{{ alloc.rfq_line_id }}">
-                {{ (alloc.available_bids or [])|tojson }}
+                {{ alloc.available_bids|tojson|safe }}
             </script>
+            {% if rec and rec.alternatives %}
+            <script type="application/json" id="alts-data-{{ alloc.rfq_line_id }}">
+                {{ rec.alternatives|tojson|safe }}
+            </script>
+            {% endif %}
+            {% if rec and rec.recommended_splits %}
+            <script type="application/json" id="rec-splits-data-{{ alloc.rfq_line_id }}">
+                {{ rec.recommended_splits|tojson|safe }}
+            </script>
+            {% endif %}
         </div>
         {% endfor %}
     </div>
 
-    <!-- Actionable Validation Checklist & Real-Time Feedback -->
-    <div class="card" style="border-left: 4px solid var(--accent); margin-bottom: 1.5rem; background: var(--bg-card);">
-        <div style="font-weight: 700; font-size: 0.9375rem; color: var(--text-main); margin-bottom: 0.5rem;">
-            Enterprise Award Validation Checks
+    <!-- RFQ-Level Exception Summary Accordion Card (Collapsed by Default) -->
+    <div class="card" id="rfq-exceptions-summary" style="display: none; padding: 0.75rem 1.25rem; margin-bottom: 1.25rem; background: rgba(245, 158, 11, 0.08); border: 1px solid var(--warning); border-radius: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span class="badge badge-warning" style="font-weight: 800; font-size: 0.7rem;">EXCEPTIONS</span>
+                <strong style="color: var(--text-main); font-size: 0.8125rem;" id="exceptions-summary-text">
+                    Unresolved supply shortfall across RFQ lines
+                </strong>
+            </div>
+            <button type="button" class="btn btn-secondary btn-xs" onclick="toggleExceptionsList()" id="exceptions-toggle-btn" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;">
+                Review Exceptions ▾
+            </button>
         </div>
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; font-size: 0.8125rem;">
-            <div style="display: flex; align-items: center; gap: 0.5rem;" id="val-check-quantities">
-                <span class="badge badge-success">&check;</span>
-                <span>Quantity within RFQ requirements</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 0.5rem;" id="val-check-capacity">
-                <span class="badge badge-success">&check;</span>
-                <span>Suppliers eligible &amp; within capacity</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 0.5rem;" id="val-check-currency">
-                <span class="badge badge-success">&check;</span>
-                <span>Currency normalization &amp; UOM verified</span>
-            </div>
-        </div>
-
-        <!-- Over-Allocation Blocking Error Box -->
-        <div id="overallocated-error" style="display: none; margin-top: 1rem; padding: 0.85rem; background: rgba(239, 68, 68, 0.12); border: 1px solid var(--danger); border-radius: 6px;">
-            <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
-                <strong style="color: var(--danger); font-size: 1.1rem;">&times;</strong>
-                <div>
-                    <strong style="color: var(--danger); font-size: 0.875rem;">Over-Allocation Detected &mdash; Finalization Blocked</strong>
-                    <div style="font-size: 0.8125rem; color: var(--text-main); margin-top: 0.2rem;" id="overallocated-text">
-                        Allocated quantity exceeds requested RFQ requirement. Please adjust line quantities.
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Dynamic Unallocated Warning Alert with Required Confirmation -->
-        <div id="unallocated-warning" style="display: none; margin-top: 1rem; padding: 0.85rem; background: rgba(245, 158, 11, 0.1); border: 1px solid var(--warning); border-radius: 6px;">
-            <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
-                <div style="font-size: 1.1rem; color: var(--warning); font-weight: 800;">!</div>
-                <div>
-                    <div style="font-weight: 700; color: var(--warning); font-size: 0.875rem;">
-                        Unallocated Scope Detected
-                    </div>
-                    <div style="font-size: 0.8125rem; color: var(--text-main); margin-top: 0.2rem;" id="unallocated-text">
-                        Certain line items or quantities remain unallocated in this round.
-                    </div>
-                    <div style="margin-top: 0.6rem;">
-                        <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; cursor: pointer;">
-                            <input type="checkbox" name="buyer_accepted_unallocated" id="accept_unallocated_cb" value="true" onchange="onAcceptUnallocatedChange()" {% if award.buyer_accepted_unallocated %}checked{% endif %}>
-                            <strong style="color: var(--text-main);">I understand that some requested quantity will remain unallocated.</strong>
-                        </label>
-                    </div>
-                </div>
-            </div>
+        <div id="exceptions-list-body" style="display: none; margin-top: 0.6rem; border-top: 1px dashed rgba(245,158,11,0.3); padding-top: 0.5rem; font-size: 0.78125rem; color: var(--text-muted);">
+            <!-- Populated dynamically by JS -->
         </div>
     </div>
 
-    <!-- Finalize Action Ribbon -->
-    <div style="display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 1rem;">
-        <div style="display: flex; align-items: center; gap: 1rem;">
+    <!-- Overall Allocation Action & Finalization Footer Bar -->
+    <div class="card" style="padding: 1.1rem 1.25rem; background: var(--bg-card); border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <div style="font-size: 0.8125rem; font-weight: 700; color: var(--text-main);">
+                Procurement Review &amp; Commitment Gate
+            </div>
+            <div style="font-size: 0.7rem; color: var(--text-muted);">
+                Accepting recommendations updates active proposal. Final commitment creates binding award allocations.
+            </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
             {% if award.status != 'FINALIZED' %}
-            <button type="button" id="review-award-btn" onclick="openConfirmationModal()" class="btn btn-success" style="padding: 0.7rem 2rem; font-size: 0.9375rem; font-weight: 800;">
+            <div id="unallocated-ack-wrapper" style="display: none; align-items: center; gap: 0.4rem; font-size: 0.8125rem;">
+                <input type="checkbox" id="accept_unallocated_cb" onchange="onAcceptUnallocatedChange()" style="cursor: pointer;">
+                <label for="accept_unallocated_cb" style="cursor: pointer; color: var(--warning); font-weight: 600;">
+                    Acknowledge partial fulfillment / unallocated shortfalls
+                </label>
+            </div>
+            <button type="button" class="btn btn-success" id="review-award-btn" onclick="openConfirmationModal()" style="font-weight: 800; padding: 0.55rem 1.4rem; font-size: 0.875rem;">
                 Review &amp; Finalize Award &rarr;
             </button>
             {% else %}
-            <div style="font-size: 0.875rem; color: var(--success); font-weight: 700;">
-                &check; AWARD FINALIZED &bull; READY FOR PROCUREMENT HANDOFF
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span class="badge badge-success" style="padding: 0.4rem 0.8rem; font-size: 0.8125rem; font-weight: 700;">
+                    ✓ Award Locked &amp; Finalized
+                </span>
             </div>
             {% endif %}
         </div>
     </div>
 </form>
 
-<!-- Modal: Award Decision Confirmation Summary -->
-<div id="confirmation-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 100; align-items: center; justify-content: center; padding: 1.5rem;">
-    <div class="card" style="max-width: 650px; width: 100%; max-height: 90vh; overflow-y: auto; background: var(--bg-card); border: 2px solid var(--success); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);">
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem;">
-            <div>
-                <span class="badge badge-success" style="font-size: 0.7rem;">Final Confirmation</span>
-                <h3 style="font-size: 1.2rem; font-weight: 800; color: var(--text-main); margin-top: 0.2rem;">
-                    Confirm Commercial Sourcing Award
-                </h3>
+<!-- Accept All Recommendations Modal -->
+<div id="accept-all-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 2150; align-items: center; justify-content: center; padding: 1rem;">
+    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; width: 100%; max-width: 480px; padding: 1.25rem; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.6rem;">
+            <h3 style="margin: 0; font-size: 1rem; color: var(--text-main); font-weight: 800; display: flex; align-items: center; gap: 0.35rem;">
+                <span>★</span> Accept System Recommendations
+            </h3>
+            <button type="button" onclick="closeAcceptAllModal()" style="background: none; border: none; font-size: 1.25rem; color: var(--text-muted); cursor: pointer;">&times;</button>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <div style="font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.65rem;">
+                This action applies authoritative system recommendations across all eligible line items:
             </div>
-            <button type="button" onclick="closeConfirmationModal()" class="btn btn-secondary btn-sm" style="padding: 0.2rem 0.5rem;">✕</button>
-        </div>
 
-        <div style="margin-bottom: 1.25rem; font-size: 0.8125rem; color: var(--text-muted); line-height: 1.5;">
-            Please review the final commitment details for <strong>{{ rfq.rfq_id }} &bull; {{ rfq.title }}</strong>:
-        </div>
-
-        <!-- Modal Summary Cards -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem;">
-            <div style="background: var(--bg-primary); padding: 0.85rem; border-radius: 6px; border: 1px solid var(--border-color);">
-                <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Total Committed Value</div>
-                <div style="font-size: 1.3rem; font-weight: 800; color: var(--success); font-family: var(--font-mono);" id="modal-total-val">
-                    {{ award.base_currency }} 0.00
+            <div style="background: var(--bg-card-subtle); padding: 0.65rem 0.85rem; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 0.85rem; font-size: 0.8125rem;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                    <span style="color: var(--text-muted);">Lines Ready to Accept:</span>
+                    <strong style="color: var(--success);" id="accept-all-ready-count">0 lines</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                    <span style="color: var(--text-muted);">Lines Requiring Attention:</span>
+                    <strong style="color: var(--warning);" id="accept-all-attention-count">0 lines</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-muted);">Partial Fulfillment Shortfalls:</span>
+                    <strong style="color: var(--text-main);" id="accept-all-partial-count">0 lines</strong>
                 </div>
             </div>
-            <div style="background: var(--bg-primary); padding: 0.85rem; border-radius: 6px; border: 1px solid var(--border-color);">
-                <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Fulfillment Summary</div>
-                <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-main);" id="modal-fulfillment-summary">
-                    0 / 0 Lines
-                </div>
+
+            <div style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.4;">
+                Lines with unresolved partial fulfillment or hard constraints will <strong>not</strong> be auto-accepted and will remain available for individual review.
             </div>
         </div>
 
-        <!-- Modal Suppliers Receiving Awards Breakdown -->
-        <div style="margin-bottom: 1.25rem;">
-            <div style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.4rem;">
-                Suppliers Receiving Awards:
-            </div>
-            <div id="modal-suppliers-list" style="background: var(--bg-primary); border-radius: 6px; border: 1px solid var(--border-color); padding: 0.75rem;">
-            </div>
-        </div>
-
-        <!-- Modal Warning if Partial -->
-        <div id="modal-unallocated-note" style="display: none; padding: 0.75rem; background: rgba(245, 158, 11, 0.1); border: 1px solid var(--warning); border-radius: 6px; margin-bottom: 1.25rem; font-size: 0.8125rem; color: var(--warning);">
-            <strong>Notice:</strong> This award contains unallocated quantities and will be recorded as a partial fulfillment.
-        </div>
-
-        <!-- Modal Actions -->
-        <div style="display: flex; justify-content: flex-end; gap: 0.75rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
-            <button type="button" onclick="closeConfirmationModal()" class="btn btn-secondary">
-                Back to Edit
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="closeAcceptAllModal()">Cancel</button>
+            <button type="button" class="btn btn-success btn-sm" id="accept-all-confirm-btn" onclick="confirmAcceptAllRecommendations()" style="font-weight: 800; padding: 0.35rem 1rem;">
+                Accept Recommendations
             </button>
-            <button type="button" onclick="submitFinalAwardForm()" class="btn btn-success" style="padding: 0.6rem 1.5rem; font-weight: 800;">
-                Confirm &amp; Finalize Award &rarr;
+        </div>
+    </div>
+</div>
+
+<!-- Partial Award Acknowledgment Confirmation Modal -->
+<div id="partial-ack-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 2100; align-items: center; justify-content: center; padding: 1rem;">
+    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; width: 100%; max-width: 480px; padding: 1.25rem; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.6rem;">
+            <h3 style="margin: 0; font-size: 1rem; color: var(--warning); font-weight: 800; display: flex; align-items: center; gap: 0.35rem;">
+                <span>⚠</span> Accept Partial Award
+            </h3>
+            <button type="button" onclick="closePartialAckModal()" style="background: none; border: none; font-size: 1.25rem; color: var(--text-muted); cursor: pointer;">&times;</button>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <div style="font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.6rem;">
+                You are acknowledging a partial award allocation for line item <strong id="partial-modal-sku" style="color: var(--text-main);">--</strong>:
+            </div>
+
+            <div style="background: var(--bg-card-subtle); padding: 0.65rem 0.85rem; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 0.85rem; font-size: 0.8125rem;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                    <span style="color: var(--text-muted);">Required Demand:</span>
+                    <strong style="color: var(--text-main);" id="partial-modal-req">--</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                    <span style="color: var(--text-muted);">Allocated Capacity:</span>
+                    <strong style="color: var(--accent);" id="partial-modal-alloc">--</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                    <span style="color: var(--text-muted);">Unfulfilled Shortfall:</span>
+                    <strong style="color: var(--warning);" id="partial-modal-shortfall">--</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; border-top: 1px dashed var(--border-color); padding-top: 0.25rem; margin-top: 0.25rem;">
+                    <span style="color: var(--text-muted);">Fulfillment Rate:</span>
+                    <strong style="color: var(--warning);" id="partial-modal-pct">--</strong>
+                </div>
+            </div>
+
+            <div style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; background: rgba(245,158,11,0.08); border-left: 3px solid var(--warning); padding: 0.4rem 0.6rem; border-radius: 4px;">
+                This acknowledges acceptance of a partial award. It does not finalize the RFQ.
+            </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="closePartialAckModal()">Cancel</button>
+            <button type="button" class="btn btn-warning btn-sm" id="partial-modal-confirm-btn" onclick="confirmPartialAwardAcceptance()" style="font-weight: 800; padding: 0.35rem 1rem;">
+                Confirm Partial Award
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Accessible Award Finalization Confirmation Modal -->
+<div id="confirmation-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 2000; align-items: center; justify-content: center; padding: 1rem;">
+    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; width: 100%; max-width: 520px; padding: 1.25rem; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.6rem;">
+            <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-main); font-weight: 800;">
+                Confirm &amp; Finalize Award Decision
+            </h3>
+            <button type="button" onclick="closeConfirmationModal()" style="background: none; border: none; font-size: 1.25rem; color: var(--text-muted); cursor: pointer;">&times;</button>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <div style="font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.65rem;">
+                You are about to finalize the procurement award for <strong>{{ rfq.rfq_id }}</strong>:
+            </div>
+
+            <div style="background: var(--bg-card-subtle); padding: 0.65rem 0.85rem; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 0.85rem;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem; font-size: 0.8125rem;">
+                    <span style="color: var(--text-muted);">Total Award Commitment:</span>
+                    <strong style="color: var(--success); font-family: var(--font-mono); font-size: 0.9375rem;" id="modal-total-val">{{ award.base_currency }} 0.00</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.8125rem;">
+                    <span style="color: var(--text-muted);">Fulfillment Summary:</span>
+                    <strong style="color: var(--text-main);" id="modal-fulfillment-summary">--</strong>
+                </div>
+            </div>
+
+            <div style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.35rem;">
+                Supplier Allocation Breakdown:
+            </div>
+            <div id="modal-suppliers-list" style="display: flex; flex-direction: column; gap: 0.3rem; max-height: 160px; overflow-y: auto; margin-bottom: 0.85rem;">
+                <!-- Populated dynamically -->
+            </div>
+
+            <div id="modal-unallocated-note" style="display: none; background: rgba(245, 158, 11, 0.1); border: 1px solid var(--warning); border-radius: 6px; padding: 0.5rem 0.65rem; font-size: 0.75rem; color: var(--text-main); margin-bottom: 0.85rem;">
+                ⚠ <strong>Partial Fulfillment:</strong> Some RFQ line items have unallocated demand/shortfall. Proceeding will lock this award with accepted partial fulfillment.
+            </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="closeConfirmationModal()">Cancel</button>
+            <button type="button" class="btn btn-success btn-sm" onclick="submitFinalAwardForm()" style="font-weight: 800; padding: 0.4rem 1.15rem;">
+                Confirm &amp; Finalize Award
             </button>
         </div>
     </div>
 </div>
 
 <script>
+    // =========================================================================
+    // Client-Side Dimension-Safe Sourcing Interaction Engine
+    // =========================================================================
+
+    let currentAckLineId = null;
+    const rfqId = "{{ rfq.rfq_id }}";
+
+    function toggleSplitsDrawer(lineId) {
+        const drawer = document.getElementById(`splits-drawer-${lineId}`);
+        const adjustBtn = document.getElementById(`adjust-btn-${lineId}`);
+        const footerBtn = document.getElementById(`footer-toggle-btn-${lineId}`);
+        if (!drawer) return;
+
+        const isCurrentlyOpen = (drawer.style.display !== 'none');
+        if (isCurrentlyOpen) {
+            drawer.style.display = 'none';
+            if (adjustBtn) adjustBtn.innerText = 'Adjust Allocation ▾';
+            if (footerBtn) footerBtn.innerText = 'Allocation Details ▾';
+        } else {
+            drawer.style.display = 'block';
+            if (adjustBtn) adjustBtn.innerText = 'Collapse Adjustments ▲';
+            if (footerBtn) footerBtn.innerText = 'Allocation Details ▲';
+            const firstInp = drawer.querySelector('.split-qty-input');
+            if (firstInp) firstInp.focus();
+        }
+    }
+
+    function togglePopoverFor(btnId) {
+        const btn = document.getElementById(btnId);
+        if (btn) {
+            const wrapper = btn.closest('.calc-popover-wrapper');
+            if (wrapper) {
+                wrapper.classList.toggle('is-open');
+            }
+        }
+    }
+
+    function scrollToLine(lineId) {
+        const card = document.getElementById(`line-card-${lineId}`);
+        if (card) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            card.style.outline = '2px solid var(--accent)';
+            setTimeout(() => { card.style.outline = 'none'; }, 2000);
+        }
+    }
+
+    function openAcceptAllModal() {
+        const cards = document.querySelectorAll('.alloc-line-card');
+        let readyCount = 0;
+        let attentionCount = 0;
+        let partialCount = 0;
+
+        cards.forEach(c => {
+            const hasRec = c.dataset.hasRec === 'true';
+            const isShortfall = c.dataset.isShortfall === 'true';
+            const currentStatus = c.dataset.decisionStatus;
+
+            if (hasRec && !isShortfall) {
+                if (currentStatus !== 'BUYER_ACCEPTED') {
+                    readyCount++;
+                }
+            } else {
+                attentionCount++;
+                if (isShortfall) partialCount++;
+            }
+        });
+
+        document.getElementById('accept-all-ready-count').innerText = `${readyCount} line${readyCount !== 1 ? 's' : ''}`;
+        document.getElementById('accept-all-attention-count').innerText = `${attentionCount} line${attentionCount !== 1 ? 's' : ''}`;
+        document.getElementById('accept-all-partial-count').innerText = `${partialCount} line${partialCount !== 1 ? 's' : ''}`;
+
+        const confirmBtn = document.getElementById('accept-all-confirm-btn');
+        if (confirmBtn) {
+            confirmBtn.innerText = `Accept ${readyCount} Recommendation${readyCount !== 1 ? 's' : ''}`;
+            confirmBtn.disabled = (readyCount === 0);
+        }
+
+        document.getElementById('accept-all-modal').style.display = 'flex';
+    }
+
+    function closeAcceptAllModal() {
+        document.getElementById('accept-all-modal').style.display = 'none';
+    }
+
+    function confirmAcceptAllRecommendations() {
+        const cards = document.querySelectorAll('.alloc-line-card');
+        cards.forEach(c => {
+            const lineId = c.dataset.lineId;
+            const hasRec = c.dataset.hasRec === 'true';
+            const isShortfall = c.dataset.isShortfall === 'true';
+
+            if (hasRec && !isShortfall) {
+                c.dataset.decisionStatus = 'BUYER_ACCEPTED';
+                applyRecommendationToLine(lineId);
+                
+                const badge = document.getElementById(`rec-badge-${lineId}`);
+                if (badge) {
+                    badge.className = 'badge badge-buyer-accepted rec-status-badge';
+                    badge.innerText = '✓ BUYER ACCEPTED';
+                }
+                const note = document.getElementById(`rec-note-${lineId}`);
+                if (note) note.style.display = 'inline';
+
+                const actionContainer = document.getElementById(`line-action-container-${lineId}`);
+                if (actionContainer) {
+                    actionContainer.innerHTML = '<span class="badge badge-buyer-accepted" style="font-size: 0.75rem; padding: 0.25rem 0.55rem; font-weight: 800;">✓ Accepted</span>';
+                }
+            }
+        });
+
+        closeAcceptAllModal();
+        recalculateTotals(true);
+    }
+
+    function openPartialAckModal(lineId, sku, req, alloc, shortfall, uom, pct) {
+        currentAckLineId = lineId;
+        document.getElementById('partial-modal-sku').innerText = `${sku} (${lineId})`;
+        document.getElementById('partial-modal-req').innerText = `${req} ${uom}`;
+        document.getElementById('partial-modal-alloc').innerText = `${alloc} ${uom}`;
+        document.getElementById('partial-modal-shortfall').innerText = `${shortfall} ${uom}`;
+        document.getElementById('partial-modal-pct').innerText = `${pct}%`;
+        document.getElementById('partial-ack-modal').style.display = 'flex';
+    }
+
+    function closePartialAckModal() {
+        document.getElementById('partial-ack-modal').style.display = 'none';
+        currentAckLineId = null;
+    }
+
+    function confirmPartialAwardAcceptance() {
+        if (currentAckLineId) {
+            const card = document.getElementById(`line-card-${currentAckLineId}`);
+            if (card) {
+                card.dataset.decisionStatus = 'PARTIAL_ACKNOWLEDGED';
+            }
+            applyRecommendationToLine(currentAckLineId);
+            const ackCb = document.getElementById('accept_unallocated_cb');
+            if (ackCb) {
+                ackCb.checked = true;
+            }
+            const banner = document.getElementById(`shortfall-banner-${currentAckLineId}`);
+            if (banner) {
+                banner.style.background = 'rgba(16, 185, 129, 0.12)';
+                banner.style.borderColor = 'var(--success)';
+                const headerDiv = document.getElementById(`shortfall-header-${currentAckLineId}`);
+                if (headerDiv) {
+                    headerDiv.style.color = 'var(--success)';
+                    headerDiv.innerHTML = '<span>✓ PARTIAL AWARD ACKNOWLEDGED BY BUYER</span>';
+                }
+            }
+            const recBadge = document.getElementById(`rec-badge-${currentAckLineId}`);
+            if (recBadge) {
+                recBadge.className = 'badge badge-success rec-status-badge';
+                recBadge.innerText = '✓ PARTIAL AWARD ACCEPTED';
+            }
+            const partialAction = document.getElementById(`partial-action-container-${currentAckLineId}`);
+            if (partialAction) {
+                partialAction.innerHTML = '<span class="badge badge-success" style="font-size: 0.75rem; padding: 0.25rem 0.55rem; font-weight: 800;">✓ Partial Accepted</span>';
+            }
+        }
+        closePartialAckModal();
+        recalculateTotals(true);
+    }
+
+    function acceptRecommendationForLine(lineId) {
+        const card = document.getElementById(`line-card-${lineId}`);
+        if (!card) return;
+        card.dataset.decisionStatus = 'BUYER_ACCEPTED';
+        applyRecommendationToLine(lineId);
+
+        const badge = document.getElementById(`rec-badge-${lineId}`);
+        if (badge) {
+            badge.className = 'badge badge-buyer-accepted rec-status-badge';
+            badge.innerText = '✓ BUYER ACCEPTED';
+        }
+        const note = document.getElementById(`rec-note-${lineId}`);
+        if (note) note.style.display = 'inline';
+
+        const actionContainer = document.getElementById(`line-action-container-${lineId}`);
+        if (actionContainer) {
+            actionContainer.innerHTML = '<span class="badge badge-buyer-accepted" style="font-size: 0.75rem; padding: 0.25rem 0.55rem; font-weight: 800;">✓ Accepted</span>';
+        }
+
+        recalculateTotals(true);
+    }
+
+    function resetToRecommendation(lineId) {
+        const card = document.getElementById(`line-card-${lineId}`);
+        if (!card) return;
+        card.dataset.decisionStatus = '';
+        applyRecommendationToLine(lineId);
+
+        const note = document.getElementById(`rec-note-${lineId}`);
+        if (note) note.style.display = 'none';
+
+        const actionContainer = document.getElementById(`line-action-container-${lineId}`);
+        if (actionContainer) {
+            actionContainer.innerHTML = `<button type="button" class="btn btn-success btn-sm" onclick="acceptRecommendationForLine('${lineId}')" style="font-size: 0.75rem; padding: 0.25rem 0.65rem; font-weight: 800;">Accept Recommendation</button>`;
+        }
+
+        recalculateTotals(true);
+    }
+
+    function applyRecommendationToLine(lineId) {
+        const card = document.getElementById(`line-card-${lineId}`);
+        if (!card) return;
+        const scriptEl = document.getElementById(`rec-splits-data-${lineId}`);
+        if (!scriptEl) return;
+        const recSplits = JSON.parse(scriptEl.textContent);
+        if (!recSplits || recSplits.length === 0) return;
+
+        const bidsScript = document.getElementById(`bids-data-${lineId}`);
+        const bids = bidsScript ? JSON.parse(bidsScript.textContent) : [];
+
+        renderSplitsToLine(card, recSplits, bids);
+    }
+
+    function applyAlternativeToLine(lineId, altIndex) {
+        const card = document.getElementById(`line-card-${lineId}`);
+        if (!card) return;
+        const scriptEl = document.getElementById(`alts-data-${lineId}`);
+        if (!scriptEl) return;
+        const alts = JSON.parse(scriptEl.textContent);
+        if (!alts || !alts[altIndex] || !alts[altIndex].splits) return;
+
+        const bidsScript = document.getElementById(`bids-data-${lineId}`);
+        const bids = bidsScript ? JSON.parse(bidsScript.textContent) : [];
+
+        card.dataset.decisionStatus = 'BUYER_MODIFIED';
+        renderSplitsToLine(card, alts[altIndex].splits, bids);
+        recalculateTotals(true);
+    }
+
+    function renderSplitsToLine(card, splits, bids) {
+        const tbody = card.querySelector('.splits-tbody');
+        tbody.innerHTML = '';
+        const reqUom = card.dataset.reqUom || 'PCS';
+
+        splits.forEach(sp => {
+            const tr = document.createElement('tr');
+            tr.className = 'split-row';
+            tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+            tr.dataset.supplierId = sp.supplier_id;
+
+            const convCap = (sp.converted_capacity !== undefined && sp.converted_capacity !== null) ? sp.converted_capacity : sp.quoted_capacity;
+            const uomFormula = sp.uom_conversion_formula || '';
+            const unitPrice = parseFloat(sp.unit_landed_cost) || 0;
+            const awardedQty = parseFloat(sp.awarded_qty) || 0;
+            const splitVal = awardedQty * unitPrice;
+
+            tr.innerHTML = `
+                <td style="padding: 0.45rem 0.6rem;">
+                    <select class="supplier-split-select" onchange="onSplitFieldChange(this)" style="width: 100%; font-size: 0.78125rem; padding: 0.3rem 0.45rem; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
+                        ${bids.map(b => `
+                            <option value="${b.supplier_id}" 
+                                    data-name="${b.supplier_name}" 
+                                    data-quote-id="${b.quote_id}" 
+                                    data-price="${b.unit_landed_cost}" 
+                                    data-capacity="${b.supplier_quoted_qty || b.quoted_qty || ''}" 
+                                    data-uom="${b.supplier_quoted_uom || b.quoted_uom || reqUom}"
+                                    data-converted-capacity="${b.converted_capacity || b.supplier_quoted_qty || b.quoted_qty || ''}"
+                                    data-converted-uom="${reqUom}"
+                                    data-uom-factor="${b.uom_conversion_factor || '1.0'}"
+                                    data-uom-formula="${b.uom_conversion_formula || ''}"
+                                    data-base-price="${b.base_unit_price || b.unit_landed_cost}"
+                                    data-discount-pct="${b.discount_pct || ''}"
+                                    data-tax-amount="${b.tax_amount || ''}"
+                                    data-tax-pct="${b.tax_rate_pct || ''}"
+                                    data-charges="${b.allocated_charges || ''}"
+                                    ${b.supplier_id === sp.supplier_id ? 'selected' : ''}>
+                                ${b.supplier_name} &bull; ({{ award.base_currency }} ${parseFloat(b.unit_landed_cost).toFixed(2)} / ${reqUom}) ${b.is_l1_for_line ? '[L1 Optimal]' : ''}
+                            </option>
+                        `).join('')}
+                    </select>
+                </td>
+                <td style="text-align: right; font-family: var(--font-mono); font-size: 0.78125rem; color: var(--text-muted); padding: 0.45rem 0.6rem;">
+                    <div style="display: inline-flex; align-items: center; justify-content: flex-end;">
+                        <span class="split-capacity-display" style="font-weight: 700; color: var(--text-main);">${convCap !== null ? convCap : 'Unavailable'}</span>
+                        <span class="split-capacity-uom-display" style="margin-left: 0.25rem;">${reqUom}</span>
+                        <div class="calc-popover-wrapper">
+                            <button type="button" class="calc-info-btn" aria-label="View supplier capacity details">ⓘ</button>
+                            <div class="calc-popover-card">
+                                <div class="calc-popover-header">
+                                    <span class="calc-popover-title">Converted Supplier Capacity</span>
+                                    <span class="badge badge-info" style="font-size: 0.65rem;">Provenance</span>
+                                </div>
+                                <div class="calc-popover-row">
+                                    <span class="calc-popover-label">Supplier</span>
+                                    <span class="calc-popover-value">${sp.supplier_name}</span>
+                                </div>
+                                <div class="calc-popover-row">
+                                    <span class="calc-popover-label">Original Quoted Bid</span>
+                                    <span class="calc-popover-value">${sp.quoted_capacity || 'N/A'} ${sp.quoted_uom || reqUom}</span>
+                                </div>
+                                ${uomFormula ? `
+                                <div class="calc-popover-row">
+                                    <span class="calc-popover-label">UOM Conversion</span>
+                                    <span class="calc-popover-value" style="color: var(--accent);">${uomFormula}</span>
+                                </div>` : ''}
+                                <div class="calc-popover-row calc-popover-total">
+                                    <span>= Converted Capacity</span>
+                                    <span>${convCap !== null ? convCap : 'N/A'} ${reqUom}</span>
+                                </div>
+                                <div class="calc-popover-source">
+                                    Calculated deterministically via UOMResolver.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </td>
+                <td style="text-align: right; font-family: var(--font-mono); font-size: 0.78125rem; padding: 0.45rem 0.6rem;">
+                    <span class="split-price-display" style="font-weight: 700; color: var(--text-main);">${unitPrice.toFixed(2)}</span>
+                </td>
+                <td style="text-align: right; padding: 0.45rem 0.6rem;">
+                    <div style="display: flex; flex-direction: column; align-items: flex-end;">
+                        <input type="number" 
+                               step="any" 
+                               min="0" 
+                               class="split-qty-input" 
+                               value="${awardedQty}" 
+                               oninput="onAwardQtyInput(this)" 
+                               onchange="onAwardQtyChange(this)" 
+                               style="width: 105px; text-align: right; font-family: var(--font-mono); font-weight: 800; padding: 0.3rem 0.45rem; font-size: 0.8125rem; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-input); color: var(--text-main);">
+                        <div class="qty-constraint-hint">
+                            Max: <span class="max-allocatable-span">${convCap !== null ? convCap : '0'}</span> ${reqUom}
+                        </div>
+                    </div>
+                </td>
+                <td style="text-align: right; font-family: var(--font-mono); font-weight: 800; color: var(--success); padding: 0.45rem 0.6rem;">
+                    <span class="split-val-display">${splitVal.toFixed(2)}</span>
+                </td>
+                <td style="text-align: center; padding: 0.45rem 0.6rem;">
+                    <button type="button" onclick="removeSplitRow(this)" class="btn btn-secondary btn-sm" style="padding: 0.15rem 0.4rem; font-size: 0.75rem; color: var(--danger);" title="Remove this supplier allocation">
+                        &times;
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function getSupplierConvertedCapacity(row) {
+        const select = row.querySelector('.supplier-split-select');
+        if (select) {
+            const opt = select.options[select.selectedIndex];
+            if (opt) {
+                const convCap = opt.dataset.convertedCapacity;
+                if (convCap !== undefined && convCap !== "" && convCap !== "null" && convCap !== "None") {
+                    return parseFloat(convCap);
+                }
+                const rawCap = opt.dataset.capacity;
+                if (rawCap !== undefined && rawCap !== "" && rawCap !== "null" && rawCap !== "None") {
+                    const factor = parseFloat(opt.dataset.uomFactor) || 1.0;
+                    return parseFloat(rawCap) * factor;
+                }
+            }
+        }
+        const capSpan = row.querySelector('.split-capacity-display');
+        if (capSpan) {
+            const val = parseFloat(capSpan.innerText);
+            if (!isNaN(val)) return val;
+        }
+        return null;
+    }
+
+    function onAwardQtyInput(input) {
+        const row = input.closest('.split-row');
+        const card = input.closest('.alloc-line-card');
+        if (!card || !row) return;
+
+        const rawReq = card.dataset.reqQty;
+        const reqQty = (rawReq !== "" && rawReq !== "None" && rawReq !== "null") ? parseFloat(rawReq) : null;
+        const reqUom = card.dataset.reqUom || 'PCS';
+        const capacity = getSupplierConvertedCapacity(row);
+
+        // Sum other splits on this line
+        let otherAllocated = 0;
+        card.querySelectorAll('.split-row:not(.empty-split-row)').forEach(r => {
+            if (r !== row) {
+                const otherInp = r.querySelector('.split-qty-input');
+                if (otherInp) otherAllocated += parseFloat(otherInp.value) || 0;
+            }
+        });
+
+        // Compute max allowable allocation: min(converted capacity, remaining RFQ demand)
+        let maxAllowable = capacity;
+        if (reqQty !== null) {
+            const remainingDemand = Math.max(0, reqQty - otherAllocated);
+            maxAllowable = capacity !== null ? Math.min(capacity, remainingDemand) : remainingDemand;
+        }
+
+        let enteredVal = parseFloat(input.value) || 0;
+        const hintEl = row.querySelector('.qty-constraint-hint');
+
+        if (maxAllowable !== null && enteredVal > maxAllowable) {
+            input.value = maxAllowable;
+            enteredVal = maxAllowable;
+            if (hintEl) {
+                hintEl.classList.add('is-limit');
+                hintEl.innerHTML = `Capped at max <strong>${maxAllowable} ${reqUom}</strong> (Capacity: ${capacity !== null ? capacity : 'N/A'})`;
+            }
+        } else if (hintEl) {
+            hintEl.classList.remove('is-limit');
+            hintEl.innerHTML = `Max: <span class="max-allocatable-span">${maxAllowable !== null ? maxAllowable : 'N/A'}</span> ${reqUom}`;
+        }
+
+        recalculateTotals(false);
+    }
+
+    function onAwardQtyChange(input) {
+        const card = input.closest('.alloc-line-card');
+        if (card) {
+            card.dataset.decisionStatus = 'BUYER_MODIFIED';
+        }
+        recalculateTotals(true);
+    }
+
     function onSplitFieldChange(select) {
         const row = select.closest('.split-row');
+        const card = select.closest('.alloc-line-card');
         const selectedOpt = select.options[select.selectedIndex];
-        if (selectedOpt) {
+        if (selectedOpt && row && card) {
+            card.dataset.decisionStatus = 'BUYER_MODIFIED';
             const price = parseFloat(selectedOpt.dataset.price) || 0;
-            const capacity = parseFloat(selectedOpt.dataset.capacity) || 0;
-            row.querySelector('.split-price-display').innerText = price.toFixed(2);
-            row.querySelector('.split-capacity-display').innerText = capacity;
+            const rawCap = selectedOpt.dataset.convertedCapacity || selectedOpt.dataset.capacity;
+            const capacity = (rawCap !== undefined && rawCap !== "" && rawCap !== "null" && rawCap !== "None") ? parseFloat(rawCap) : null;
+            const reqUom = card.dataset.reqUom || 'PCS';
+
+            const priceSpan = row.querySelector('.split-price-display');
+            const capSpan = row.querySelector('.split-capacity-display');
+            const uomSpan = row.querySelector('.split-capacity-uom-display');
+            if (priceSpan) priceSpan.innerText = price.toFixed(2);
+            if (capSpan) capSpan.innerText = capacity !== null ? capacity : 'Unavailable';
+            if (uomSpan) uomSpan.innerText = reqUom;
+
+            onAwardQtyInput(row.querySelector('.split-qty-input'));
+            recalculateTotals(true);
         }
-        recalculateTotals();
     }
 
     function removeSplitRow(btn) {
         const tbody = btn.closest('.splits-tbody');
+        const card = btn.closest('.alloc-line-card');
+        if (card) card.dataset.decisionStatus = 'BUYER_MODIFIED';
         btn.closest('.split-row').remove();
         if (tbody.querySelectorAll('.split-row').length === 0) {
             const emptyTr = document.createElement('tr');
             emptyTr.className = 'split-row empty-split-row';
-            emptyTr.innerHTML = '<td colspan="6" style="text-align: center; color: var(--text-muted); font-size: 0.8125rem; padding: 1rem;"><em>No supplier allocated for this line item yet.</em></td>';
+            emptyTr.innerHTML = '<td colspan="6" style="text-align: center; color: var(--text-muted); font-size: 0.8125rem; padding: 1.25rem;"><em>No supplier allocated for this line item yet. Click below to add an allocation.</em></td>';
             tbody.appendChild(emptyTr);
         }
-        recalculateTotals();
+        recalculateTotals(true);
     }
 
     function addSupplierSplit(lineId) {
-        const card = document.querySelector(`.alloc-line-card[data-line-id="${lineId}"]`);
+        const card = document.getElementById(`line-card-${lineId}`);
         if (!card) return;
+        card.dataset.decisionStatus = 'BUYER_MODIFIED';
         const tbody = card.querySelector('.splits-tbody');
         const bidsScript = document.getElementById(`bids-data-${lineId}`);
         if (!bidsScript) return;
         const bids = JSON.parse(bidsScript.textContent);
         if (!bids || bids.length === 0) return;
 
-        // Remove empty placeholder row if present
         const emptyRow = tbody.querySelector('.empty-split-row');
         if (emptyRow) emptyRow.remove();
 
-        const reqQty = parseFloat(card.dataset.reqQty) || 0;
+        const rawReq = card.dataset.reqQty;
+        const reqQty = (rawReq !== "" && rawReq !== "None" && rawReq !== "null") ? parseFloat(rawReq) : null;
         const reqUom = card.dataset.reqUom || 'PCS';
 
-        // Calculate remaining unallocated qty to default to
         let currentAllocated = 0;
         tbody.querySelectorAll('.split-qty-input').forEach(inp => {
             currentAllocated += parseFloat(inp.value) || 0;
         });
-        const defaultQty = Math.max(0, reqQty - currentAllocated);
 
-        const firstBid = bids[0];
+        const remainingDemand = reqQty !== null ? Math.max(0, reqQty - currentAllocated) : 0;
+
+        const existingSuppIds = new Set();
+        tbody.querySelectorAll('.split-row:not(.empty-split-row)').forEach(r => {
+            const sel = r.querySelector('.supplier-split-select');
+            if (sel) existingSuppIds.add(sel.value);
+            else if (r.dataset.supplierId) existingSuppIds.add(r.dataset.supplierId);
+        });
+
+        let targetBid = bids.find(b => !existingSuppIds.has(b.supplier_id));
+        if (!targetBid) targetBid = bids[0];
+
+        const convCapRaw = targetBid.converted_capacity || targetBid.supplier_quoted_qty || targetBid.quoted_qty;
+        const convCap = (convCapRaw !== null && convCapRaw !== undefined && convCapRaw !== "" && convCapRaw !== "None") ? parseFloat(convCapRaw) : null;
+        
+        let defaultQty = 0;
+        if (convCap !== null) {
+            defaultQty = Math.min(convCap, remainingDemand);
+        } else {
+            defaultQty = remainingDemand;
+        }
+
+        const unitPrice = parseFloat(targetBid.unit_landed_cost) || 0;
+        const splitVal = defaultQty * unitPrice;
+
         const tr = document.createElement('tr');
         tr.className = 'split-row';
+        tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+        tr.dataset.supplierId = targetBid.supplier_id;
         tr.innerHTML = `
-            <td>
-                <select class="supplier-split-select" onchange="onSplitFieldChange(this)" style="width: 100%; font-size: 0.8125rem; padding: 0.35rem 0.5rem;">
+            <td style="padding: 0.45rem 0.6rem;">
+                <select class="supplier-split-select" onchange="onSplitFieldChange(this)" style="width: 100%; font-size: 0.78125rem; padding: 0.3rem 0.45rem; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
                     ${bids.map(b => `
-                        <option value="${b.supplier_id}" data-name="${b.supplier_name}" data-quote-id="${b.quote_id}" data-price="${b.unit_landed_cost}" data-capacity="${b.quoted_qty}" data-uom="${b.quoted_uom}">
-                            ${b.supplier_name} &bull; ({{ award.base_currency }} ${b.unit_landed_cost} / ${b.quoted_uom}) ${b.is_l1_for_line ? '[L1]' : ''}
+                        <option value="${b.supplier_id}" 
+                                data-name="${b.supplier_name}" 
+                                data-quote-id="${b.quote_id}" 
+                                data-price="${b.unit_landed_cost}" 
+                                data-capacity="${b.supplier_quoted_qty || b.quoted_qty || ''}" 
+                                data-uom="${b.supplier_quoted_uom || b.quoted_uom || reqUom}"
+                                data-converted-capacity="${b.converted_capacity || b.supplier_quoted_qty || b.quoted_qty || ''}"
+                                data-converted-uom="${reqUom}"
+                                data-uom-factor="${b.uom_conversion_factor || '1.0'}"
+                                data-uom-formula="${b.uom_conversion_formula || ''}"
+                                data-base-price="${b.base_unit_price || b.unit_landed_cost}"
+                                data-discount-pct="${b.discount_pct || ''}"
+                                data-tax-amount="${b.tax_amount || ''}"
+                                data-tax-pct="${b.tax_rate_pct || ''}"
+                                data-charges="${b.allocated_charges || ''}"
+                                ${b.supplier_id === targetBid.supplier_id ? 'selected' : ''}>
+                            ${b.supplier_name} &bull; ({{ award.base_currency }} ${parseFloat(b.unit_landed_cost).toFixed(2)} / ${reqUom}) ${b.is_l1_for_line ? '[L1 Optimal]' : ''}
                         </option>
                     `).join('')}
                 </select>
             </td>
-            <td style="text-align: right; font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted);">
-                <span class="split-capacity-display">${firstBid.quoted_qty}</span> ${reqUom}
+            <td style="text-align: right; font-family: var(--font-mono); font-size: 0.78125rem; color: var(--text-muted); padding: 0.45rem 0.6rem;">
+                <div style="display: inline-flex; align-items: center; justify-content: flex-end;">
+                    <span class="split-capacity-display" style="font-weight: 700; color: var(--text-main);">${convCap !== null ? convCap : 'Unavailable'}</span>
+                    <span class="split-capacity-uom-display" style="margin-left: 0.25rem;">${reqUom}</span>
+                </div>
             </td>
-            <td style="text-align: right; font-family: var(--font-mono); font-size: 0.8125rem;">
-                <span class="split-price-display">${parseFloat(firstBid.unit_landed_cost).toFixed(2)}</span>
+            <td style="text-align: right; font-family: var(--font-mono); font-size: 0.78125rem; padding: 0.45rem 0.6rem;">
+                <span class="split-price-display" style="font-weight: 700; color: var(--text-main);">${unitPrice.toFixed(2)}</span>
             </td>
-            <td style="text-align: right;">
-                <input type="number" step="any" min="0" max="${reqQty}" class="split-qty-input" value="${defaultQty}" onchange="recalculateTotals()" onkeyup="recalculateTotals()" style="width: 100px; text-align: right; font-family: var(--font-mono); font-weight: 700; padding: 0.3rem 0.5rem; font-size: 0.8125rem;">
+            <td style="text-align: right; padding: 0.45rem 0.6rem;">
+                <div style="display: flex; flex-direction: column; align-items: flex-end;">
+                    <input type="number" 
+                           step="any" 
+                           min="0" 
+                           class="split-qty-input" 
+                           value="${defaultQty}" 
+                           oninput="onAwardQtyInput(this)" 
+                           onchange="onAwardQtyChange(this)" 
+                           style="width: 105px; text-align: right; font-family: var(--font-mono); font-weight: 800; padding: 0.3rem 0.45rem; font-size: 0.8125rem; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-input); color: var(--text-main);">
+                    <div class="qty-constraint-hint">
+                        Max: <span class="max-allocatable-span">${defaultQty}</span> ${reqUom}
+                    </div>
+                </div>
             </td>
-            <td style="text-align: right; font-family: var(--font-mono); font-weight: 700; color: var(--success);">
-                <span class="split-val-display">${(defaultQty * parseFloat(firstBid.unit_landed_cost)).toFixed(2)}</span>
+            <td style="text-align: right; font-family: var(--font-mono); font-weight: 800; color: var(--success); padding: 0.45rem 0.6rem;">
+                <span class="split-val-display">${splitVal.toFixed(2)}</span>
             </td>
-            <td style="text-align: center;">
-                <button type="button" onclick="removeSplitRow(this)" class="btn btn-secondary btn-sm" style="padding: 0.2rem 0.45rem; font-size: 0.75rem; color: var(--danger);">
+            <td style="text-align: center; padding: 0.45rem 0.6rem;">
+                <button type="button" onclick="removeSplitRow(this)" class="btn btn-secondary btn-sm" style="padding: 0.15rem 0.4rem; font-size: 0.75rem; color: var(--danger);" title="Remove this supplier allocation">
                     &times;
                 </button>
             </td>
         `;
         tbody.appendChild(tr);
-        recalculateTotals();
+        recalculateTotals(true);
     }
 
-    function recalculateTotals() {
+    function isAllocationModifiedFromRec(lineId, currentSplits) {
+        const scriptEl = document.getElementById(`rec-splits-data-${lineId}`);
+        if (!scriptEl) return false;
+        try {
+            const recSplits = JSON.parse(scriptEl.textContent) || [];
+            if (recSplits.length !== currentSplits.length) return true;
+            for (let i = 0; i < currentSplits.length; i++) {
+                const cur = currentSplits[i];
+                const rec = recSplits.find(r => r.supplier_id === cur.supplier_id);
+                if (!rec) return true;
+                if (Math.abs((parseFloat(cur.allocated_qty) || 0) - (parseFloat(rec.awarded_qty) || 0)) > 0.01) return true;
+            }
+            return false;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    let saveDraftDebounceTimer = null;
+    function saveDraftAllocation() {
+        if (saveDraftDebounceTimer) clearTimeout(saveDraftDebounceTimer);
+        saveDraftDebounceTimer = setTimeout(() => {
+            const form = document.getElementById('award-form');
+            if (!form) return;
+            const formData = new FormData(form);
+            const ackCb = document.getElementById('accept_unallocated_cb');
+            if (ackCb) {
+                formData.set('buyer_accepted_unallocated', ackCb.checked ? 'true' : 'false');
+            }
+            fetch(`/rfqs/${rfqId}/award/save-draft`, {
+                method: 'POST',
+                body: formData
+            }).catch(e => console.error('Auto draft save error:', e));
+        }, 300);
+    }
+
+    function recalculateTotals(shouldPersistDraft = false) {
         const isFinalized = {{ 'true' if award.status == 'FINALIZED' else 'false' }};
         if (isFinalized) return;
 
@@ -581,14 +2017,17 @@
         let unallocatedLines = 0;
         let unallocatedQtyTotal = 0;
         let hasOverAllocation = false;
+        let hasCapacityViolation = false;
+        const shortfallLines = [];
         const allocations = [];
 
         cards.forEach(card => {
             const lineId = card.dataset.lineId;
             const sku = card.dataset.sku;
             const desc = card.dataset.desc;
-            const reqQty = parseFloat(card.dataset.reqQty) || 0;
-            const reqUom = card.dataset.reqUom;
+            const rawReq = card.dataset.reqQty;
+            const reqQty = (rawReq !== "" && rawReq !== "None" && rawReq !== "null") ? parseFloat(rawReq) : null;
+            const reqUom = card.dataset.reqUom || 'PCS';
 
             const splitRows = card.querySelectorAll('.split-row:not(.empty-split-row)');
             let lineAllocatedQty = 0;
@@ -601,7 +2040,8 @@
                 let suppName = '';
                 let quoteId = '';
                 let unitPrice = 0;
-                let capacity = 0;
+                let capacity = null;
+                let quom = reqUom;
 
                 if (select) {
                     const opt = select.options[select.selectedIndex];
@@ -610,14 +2050,28 @@
                         suppName = opt.dataset.name || '';
                         quoteId = opt.dataset.quoteId || '';
                         unitPrice = parseFloat(opt.dataset.price) || 0;
-                        capacity = parseFloat(opt.dataset.capacity) || reqQty;
+                        const rawC = opt.dataset.convertedCapacity || opt.dataset.capacity;
+                        capacity = (rawC !== undefined && rawC !== "" && rawC !== "null" && rawC !== "None") ? parseFloat(rawC) : null;
+                        quom = opt.dataset.uom || reqUom;
                     }
                 } else {
                     unitPrice = parseFloat(row.querySelector('.split-price-display')?.innerText) || 0;
+                    const capSpan = row.querySelector('.split-capacity-display');
+                    if (capSpan) {
+                        const parsedC = parseFloat(capSpan.innerText);
+                        if (!isNaN(parsedC)) capacity = parsedC;
+                    }
                 }
 
                 const qtyInp = row.querySelector('.split-qty-input');
                 const allocQty = qtyInp ? (parseFloat(qtyInp.value) || 0) : 0;
+
+                if (capacity !== null && allocQty > capacity + 0.01) {
+                    hasCapacityViolation = true;
+                    if (qtyInp) qtyInp.style.borderColor = 'var(--danger)';
+                } else if (qtyInp) {
+                    qtyInp.style.borderColor = 'var(--border-color)';
+                }
 
                 const splitVal = allocQty * unitPrice;
                 lineAllocatedQty += allocQty;
@@ -632,70 +2086,135 @@
                         supplier_name: suppName,
                         quote_id: quoteId,
                         allocated_qty: allocQty,
-                        quoted_uom: reqUom,
+                        quoted_uom: quom,
                         unit_landed_cost: unitPrice,
                         split_value: splitVal,
-                        quoted_capacity: capacity
+                        quoted_capacity: capacity,
+                        supplier_quoted_qty: capacity
                     });
                 }
             });
 
             grandTotalVal += lineTotalVal;
 
-            // Visual quantity texts
-            const allocQtyText = card.querySelector('.line-allocated-qty-text');
-            if (allocQtyText) allocQtyText.innerText = lineAllocatedQty + ' ' + reqUom;
+            // Decision state resolution
+            const explicitDecision = card.dataset.decisionStatus;
+            const recBadge = document.getElementById(`rec-badge-${lineId}`);
+            let decisionStatusToPersist = explicitDecision || '';
 
-            const remQty = Math.max(0, reqQty - lineAllocatedQty);
-            const remQtyText = card.querySelector('.line-remaining-qty-text');
-            if (remQtyText) {
-                remQtyText.innerHTML = 'Remaining: <strong>' + remQty + ' ' + reqUom + '</strong>';
-                remQtyText.style.color = (remQty === 0 && lineAllocatedQty === reqQty) ? 'var(--success)' : 'var(--warning)';
+            if (recBadge) {
+                if (explicitDecision === 'BUYER_ACCEPTED') {
+                    recBadge.className = 'badge badge-buyer-accepted rec-status-badge';
+                    recBadge.innerText = '✓ BUYER ACCEPTED';
+                    card.classList.remove('is-modified');
+                } else if (explicitDecision === 'PARTIAL_ACKNOWLEDGED') {
+                    recBadge.className = 'badge badge-success rec-status-badge';
+                    recBadge.innerText = '✓ PARTIAL AWARD ACCEPTED';
+                    card.classList.remove('is-modified');
+                } else if (explicitDecision === 'BUYER_MODIFIED' || isAllocationModifiedFromRec(lineId, splits)) {
+                    recBadge.className = 'badge badge-buyer-modified rec-status-badge';
+                    recBadge.innerText = 'BUYER MODIFIED';
+                    card.classList.add('is-modified');
+                    decisionStatusToPersist = 'BUYER_MODIFIED';
+                } else {
+                    recBadge.className = 'badge badge-success rec-status-badge';
+                    recBadge.innerText = '★ RECOMMENDED ALLOCATION';
+                    card.classList.remove('is-modified');
+                }
             }
+
+            const allocQtyText = card.querySelector('.line-allocated-qty-text');
+            if (allocQtyText) {
+                allocQtyText.innerText = lineAllocatedQty + (reqQty !== null ? ' / ' + reqQty + ' ' + reqUom : ' (RFQ Qty N/A)');
+            }
+
+            const remQty = reqQty !== null ? Math.max(0, reqQty - lineAllocatedQty) : null;
+            const remDemandText = card.querySelector('.line-remaining-demand-text');
+            if (remDemandText) {
+                if (remQty !== null) {
+                    if (remQty === 0 && lineAllocatedQty === reqQty) {
+                        remDemandText.innerHTML = `0 ${reqUom} Remaining &bull; Fully Fulfilled`;
+                        remDemandText.style.color = 'var(--success)';
+                    } else {
+                        remDemandText.innerHTML = `${remQty} ${reqUom} still required (Shortfall)`;
+                        remDemandText.style.color = 'var(--warning)';
+                    }
+                } else {
+                    remDemandText.innerHTML = 'RFQ Quantity Unavailable';
+                    remDemandText.style.color = 'var(--danger)';
+                }
+            }
+
+            const progressFill = card.querySelector('.progress-fill');
+            const pctText = card.querySelector('.line-fulfillment-pct-text');
+            let pct = 0;
+            if (reqQty !== null && reqQty > 0) {
+                pct = Math.min(100, Math.round((lineAllocatedQty / reqQty) * 100));
+            }
+            if (progressFill) progressFill.style.width = `${pct}%`;
+            if (pctText) pctText.innerText = `${pct}%`;
 
             const statusBadge = card.querySelector('.line-status-badge');
             let allocState = 'UNALLOCATED';
 
-            if (lineAllocatedQty > reqQty) {
+            if (reqQty === null) {
+                unallocatedLines++;
+                allocState = 'QUANTITY_UNAVAILABLE';
+                if (statusBadge) {
+                    statusBadge.className = 'line-status-badge badge badge-danger';
+                    statusBadge.innerText = '✕ Qty Unavailable';
+                }
+                card.classList.remove('is-overallocated');
+            } else if (lineAllocatedQty > reqQty + 0.01) {
                 hasOverAllocation = true;
                 allocState = 'OVER_ALLOCATED';
                 if (statusBadge) {
                     statusBadge.className = 'line-status-badge badge badge-danger';
-                    statusBadge.innerText = `Over-Allocated! (${lineAllocatedQty}/${reqQty} ${reqUom})`;
+                    statusBadge.innerText = `✕ Over-Allocated (+${lineAllocatedQty - reqQty})`;
                 }
+                card.classList.add('is-overallocated');
             } else if (lineAllocatedQty === reqQty && reqQty > 0) {
                 fullyAllocatedLines++;
                 allocState = 'FULLY_ALLOCATED';
                 if (statusBadge) {
                     statusBadge.className = 'line-status-badge badge badge-success';
-                    statusBadge.innerText = '100% Fully Allocated';
+                    statusBadge.innerText = '✓ Fully Fulfilled';
                 }
+                card.classList.remove('is-overallocated');
             } else if (lineAllocatedQty > 0) {
                 partiallyAllocatedLines++;
                 unallocatedQtyTotal += (reqQty - lineAllocatedQty);
+                shortfallLines.push({ lineId, sku, shortfall: reqQty - lineAllocatedQty, uom: reqUom });
                 allocState = 'PARTIALLY_ALLOCATED';
                 if (statusBadge) {
                     statusBadge.className = 'line-status-badge badge badge-warning';
-                    statusBadge.innerText = `Partially Allocated (${lineAllocatedQty}/${reqQty} ${reqUom})`;
+                    statusBadge.innerText = `! ${pct}% Partial (${reqQty - lineAllocatedQty} Shortfall)`;
                 }
+                card.classList.remove('is-overallocated');
             } else {
                 unallocatedLines++;
                 unallocatedQtyTotal += reqQty;
+                shortfallLines.push({ lineId, sku, shortfall: reqQty, uom: reqUom });
                 allocState = 'UNALLOCATED';
                 if (statusBadge) {
                     statusBadge.className = 'line-status-badge badge badge-muted';
-                    statusBadge.innerText = 'Unallocated by Buyer';
+                    statusBadge.innerText = '○ Unallocated';
                 }
+                card.classList.remove('is-overallocated');
             }
 
             allocations.push({
                 rfq_line_id: lineId,
                 item_sku: sku,
                 item_description: desc,
+                buyer_decision_status: decisionStatusToPersist,
                 required_qty: reqQty,
                 required_uom: reqUom,
                 total_allocated_qty: lineAllocatedQty,
-                unallocated_qty: remQty,
+                unallocated_qty: remQty !== null ? remQty : 0,
+                remaining_qty: remQty,
+                shortfall_qty: remQty,
+                fulfillment_pct: pct,
                 total_line_value: lineTotalVal,
                 allocation_state: allocState,
                 supplier_splits: splits
@@ -704,7 +2223,6 @@
 
         document.getElementById('allocations_json').value = JSON.stringify(allocations);
 
-        // Update header summaries
         const headerTotal = document.getElementById('header-total-val');
         if (headerTotal) {
             headerTotal.innerText = '{{ award.base_currency }} ' + grandTotalVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -718,35 +2236,55 @@
             headerPartCount.innerText = `${partiallyAllocatedLines} Partial • ${unallocatedLines} Unallocated`;
         }
 
-        // Handle Over-Allocation Error Block
-        const overAllocBox = document.getElementById('overallocated-error');
+        // RFQ-Level Exception Summary Banner
+        const exceptionsCard = document.getElementById('rfq-exceptions-summary');
+        const exceptionsText = document.getElementById('exceptions-summary-text');
+        const exceptionsBody = document.getElementById('exceptions-list-body');
+        const unallocAck = document.getElementById('unallocated-ack-wrapper');
+        const acceptCb = document.getElementById('accept_unallocated_cb');
         const reviewBtn = document.getElementById('review-award-btn');
 
-        if (hasOverAllocation) {
-            if (overAllocBox) overAllocBox.style.display = '';
-            if (reviewBtn) reviewBtn.disabled = true;
+        if (shortfallLines.length > 0) {
+            if (exceptionsCard) exceptionsCard.style.display = '';
+            if (exceptionsText) exceptionsText.innerText = `${shortfallLines.length} RFQ lines have unresolved shortfall (${unallocatedQtyTotal} total units unallocated)`;
+            if (exceptionsBody) {
+                exceptionsBody.innerHTML = shortfallLines.map(s => `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.25rem 0; border-bottom: 1px dashed rgba(245,158,11,0.2);">
+                        <div>
+                            <strong>${s.sku}</strong> <span style="font-size: 0.7rem; color: var(--text-muted);">(${s.lineId})</span>:
+                            <span style="color: var(--warning); font-weight: 700; margin-left: 0.25rem;">${s.shortfall} ${s.uom} shortfall</span>
+                        </div>
+                        <a href="javascript:void(0)" onclick="scrollToLine('${s.lineId}')" style="color: var(--accent); font-weight: 700; font-size: 0.75rem; text-decoration: underline;">
+                            View Line &rarr;
+                        </a>
+                    </div>
+                `).join('');
+            }
+            if (unallocAck) unallocAck.style.display = 'inline-flex';
+            if (reviewBtn) reviewBtn.disabled = !(acceptCb && acceptCb.checked);
         } else {
-            if (overAllocBox) overAllocBox.style.display = 'none';
+            if (exceptionsCard) exceptionsCard.style.display = 'none';
+            if (unallocAck) unallocAck.style.display = 'none';
+            if (reviewBtn) reviewBtn.disabled = hasOverAllocation || hasCapacityViolation;
         }
 
-        // Handle Unallocated Warning
-        const unallocWarn = document.getElementById('unallocated-warning');
-        const acceptCb = document.getElementById('accept_unallocated_cb');
+        if (shouldPersistDraft) {
+            saveDraftAllocation();
+        }
+    }
 
-        if (!hasOverAllocation && (unallocatedLines > 0 || partiallyAllocatedLines > 0 || unallocatedQtyTotal > 0)) {
-            if (unallocWarn) unallocWarn.style.display = '';
-            document.getElementById('unallocated-text').innerText = `${unallocatedQtyTotal} units across ${unallocatedLines + partiallyAllocatedLines} line(s) remain unallocated in this round.`;
-            if (reviewBtn) {
-                reviewBtn.disabled = !(acceptCb && acceptCb.checked);
-            }
-        } else if (!hasOverAllocation) {
-            if (unallocWarn) unallocWarn.style.display = 'none';
-            if (reviewBtn) reviewBtn.disabled = false;
+    function toggleExceptionsList() {
+        const body = document.getElementById('exceptions-list-body');
+        const toggleBtn = document.getElementById('exceptions-toggle-btn');
+        if (body) {
+            const isClosed = (body.style.display === 'none');
+            body.style.display = isClosed ? 'block' : 'none';
+            if (toggleBtn) toggleBtn.innerText = isClosed ? 'Hide Exceptions ▲' : 'Review Exceptions ▾';
         }
     }
 
     function onAcceptUnallocatedChange() {
-        recalculateTotals();
+        recalculateTotals(true);
     }
 
     function openConfirmationModal() {
@@ -760,8 +2298,8 @@
 
         allocations.forEach(a => {
             totalVal += parseFloat(a.total_line_value) || 0;
-            if (a.allocation_state === 'FULLY_ALLOCATED') fullyCount++;
-            else if (a.allocation_state === 'PARTIALLY_ALLOCATED') partialCount++;
+            if (a.allocation_state === 'FULLY_ALLOCATED' || a.allocation_state === 'FULLY_FULFILLED') fullyCount++;
+            else if (a.allocation_state === 'PARTIALLY_ALLOCATED' || a.allocation_state === 'PARTIALLY_FULFILLED') partialCount++;
             else unallocCount++;
 
             (a.supplier_splits || []).forEach(sp => {
@@ -775,7 +2313,7 @@
         });
 
         document.getElementById('modal-total-val').innerText = '{{ award.base_currency }} ' + totalVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        document.getElementById('modal-fulfillment-summary').innerText = `${fullyCount} Fully Allocated • ${partialCount} Partial • ${unallocCount} Unallocated`;
+        document.getElementById('modal-fulfillment-summary').innerText = `${fullyCount} Fully Fulfilled • ${partialCount} Partial • ${unallocCount} Unallocated`;
 
         const suppContainer = document.getElementById('modal-suppliers-list');
         suppContainer.innerHTML = '';
@@ -791,10 +2329,10 @@
                 div.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
                 div.innerHTML = `
                     <div>
-                        <strong style="color: var(--text-main); font-size: 0.875rem;">${sname}</strong>
-                        <span style="font-size: 0.75rem; color: var(--text-muted); margin-left: 0.5rem;">(${sdata.lines} line items awarded)</span>
+                        <strong style="color: var(--text-main); font-size: 0.8125rem;">${sname}</strong>
+                        <span style="font-size: 0.7rem; color: var(--text-muted); margin-left: 0.35rem;">(${sdata.lines} item${sdata.lines > 1 ? 's' : ''})</span>
                     </div>
-                    <div style="font-family: var(--font-mono); font-weight: 700; color: var(--success); font-size: 0.9375rem;">
+                    <div style="font-family: var(--font-mono); font-weight: 700; color: var(--success); font-size: 0.875rem;">
                         {{ award.base_currency }} ${sdata.total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                     </div>
                 `;
@@ -820,12 +2358,33 @@
     }
 
     function submitFinalAwardForm() {
-        document.getElementById('award-form').submit();
+        const form = document.getElementById('award-form');
+        if (!form) return;
+        let unallocHidden = document.getElementById('form-hidden-unalloc-ack');
+        if (!unallocHidden) {
+            unallocHidden = document.createElement('input');
+            unallocHidden.type = 'hidden';
+            unallocHidden.id = 'form-hidden-unalloc-ack';
+            unallocHidden.name = 'buyer_accepted_unallocated';
+            form.appendChild(unallocHidden);
+        }
+        unallocHidden.value = 'true';
+        form.submit();
     }
+
+    // Dismiss popovers and modals on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeConfirmationModal();
+            closePartialAckModal();
+            closeAcceptAllModal();
+            document.querySelectorAll('.calc-popover-wrapper').forEach(w => w.classList.remove('is-open'));
+        }
+    });
 
     document.addEventListener('DOMContentLoaded', () => {
         {% if award.status != 'FINALIZED' %}
-        recalculateTotals();
+        recalculateTotals(false);
         {% endif %}
     });
 </script>

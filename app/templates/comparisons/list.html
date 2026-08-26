@@ -3,59 +3,268 @@
 {% block title %}Commercial Comparisons &amp; Rankings — Quote Intelligence{% endblock %}
 
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
-    <div>
-        <h1 style="font-size: 1.25rem; font-weight: 700;">⚖️ Commercial Comparisons &amp; Rankings</h1>
-        <p style="font-size: 0.8125rem; color: var(--text-muted);">
-            Auditable multi-supplier comparison matrices, currency normalization, freight allocation, L1/L2 rankings, and split-sourcing optimizations.
-        </p>
+<div class="breadcrumb-bar">
+    <div class="breadcrumbs">
+        <a href="/">Home</a>
+        <span class="breadcrumb-separator">/</span>
+        <span class="breadcrumb-current">Commercial Comparisons &bull; Evaluation Matrices</span>
     </div>
     <div>
         <a href="/comparisons/create" class="btn btn-primary btn-sm">+ Create New Comparison</a>
     </div>
 </div>
 
-<div class="card">
-    {% if comparisons %}
-    <table>
-        <thead>
-            <tr>
-                <th>Comparison ID</th>
-                <th>RFQ Reference</th>
-                <th>Suppliers</th>
-                <th>L1 Ranked Supplier</th>
-                <th>L1 Landed Cost</th>
-                <th>Created At</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for c in comparisons %}
-            <tr>
-                <td><code style="color: #e879f9; font-weight: 700;">{{ c.comparison_id }}</code></td>
-                <td><code style="color: var(--success);">{{ c.rfq_id }}</code></td>
-                <td>{{ c.supplier_count }} suppliers</td>
-                <td><strong style="color: var(--success);">{{ c.l1_supplier }}</strong></td>
-                <td style="font-family: var(--font-mono); font-weight: 600;">
-                    {% if c.l1_landed_cost != '—' %}
-                        {{ c.base_currency }} {{ c.l1_landed_cost }}
-                    {% else %}
-                        —
-                    {% endif %}
-                </td>
-                <td style="font-size: 0.75rem; color: var(--text-muted);">{{ c.created_at[:19] if c.created_at else "—" }}</td>
-                <td>
-                    <a href="/comparisons/{{ c.comparison_id }}" class="btn btn-primary btn-sm">Open Matrix &rarr;</a>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
-        <p>No multi-supplier comparisons evaluated yet.</p>
-        <a href="/comparisons/create" class="btn btn-primary btn-sm" style="margin-top: 0.5rem;">+ Create Your First Comparison</a>
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 1rem;">
+    <div>
+        <h1 style="font-size: 1.35rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.25rem;">
+            Commercial Comparisons &amp; Rankings
+        </h1>
+        <p style="font-size: 0.8125rem; color: var(--text-muted); margin: 0;">
+            Auditable multi-supplier comparison matrices, currency normalization, freight allocation, L1/L2 rankings, and split-sourcing optimizations.
+        </p>
     </div>
-    {% endif %}
 </div>
-{% endblock %}\n
+
+{% if comparisons %}
+<!-- Search & Filter Bar -->
+<div class="card" style="padding: 1rem; margin-bottom: 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.85rem;">
+        <!-- Real-Time Search Bar -->
+        <div style="flex: 1; min-width: 300px; position: relative;">
+            <div style="position: absolute; left: 0.85rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; font-size: 0.95rem;">
+                🔍
+            </div>
+            <input 
+                type="text" 
+                id="comp-search" 
+                placeholder="Search comparisons by RFQ title, reference, comparison ID, or supplier..." 
+                oninput="onCompSearchInput(this.value)"
+                onkeydown="onCompSearchKey(event)"
+                style="width: 100%; margin: 0; padding-left: 2.35rem; padding-right: 2.2rem; font-size: 0.875rem; height: 38px; background: var(--bg-card-subtle); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-main);"
+                autocomplete="off"
+            >
+            <button 
+                type="button" 
+                id="comp-search-clear" 
+                onclick="clearCompSearch()" 
+                style="position: absolute; right: 0.65rem; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; display: none; font-size: 0.85rem; padding: 0.2rem 0.4rem; border-radius: 4px;"
+                title="Clear search"
+            >
+                ✕
+            </button>
+        </div>
+
+        <div style="font-size: 0.75rem; color: var(--text-muted);">
+            Displaying: <strong id="comp-displayed-count" style="color: var(--text-main);">{{ comparisons|length }}</strong> of {{ comparisons|length }} comparisons
+        </div>
+    </div>
+</div>
+
+<!-- Comparisons Table Card -->
+<div class="card" id="comp-table-card" style="border-top: 3px solid var(--accent);">
+    <div class="card-header">
+        <div class="card-title">
+            Evaluated Commercial Comparisons (<span id="comp-table-count">{{ comparisons|length }}</span>)
+        </div>
+    </div>
+
+    <div style="overflow-x: auto;">
+        <table id="comp-table">
+            <thead>
+                <tr>
+                    <th style="min-width: 260px;">Procurement Event &amp; RFQ</th>
+                    <th>Participating Suppliers</th>
+                    <th>Recommended / L1 Supplier</th>
+                    <th>Evaluated Landed Cost</th>
+                    <th>Created Date</th>
+                    <th style="text-align: right; min-width: 130px;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in comparisons %}
+                <tr 
+                    class="comp-row" 
+                    data-rfq-title="{{ (c.rfq_title or '')|lower }}"
+                    data-rfq-id="{{ (c.rfq_id or '')|lower }}"
+                    data-comp-id="{{ (c.comparison_id or '')|lower }}"
+                    data-l1="{{ (c.l1_supplier or '')|lower }}"
+                    data-suppliers="{{ (c.supplier_names_str or '')|lower }}"
+                >
+                    <td>
+                        <div style="font-weight: 700; font-size: 0.9375rem; color: var(--text-main); margin-bottom: 0.2rem;">
+                            {{ c.rfq_title }}
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                            <code style="color: var(--success); font-weight: 700; font-size: 0.75rem; background: rgba(34,197,94,0.1); padding: 0.1rem 0.35rem; border-radius: 4px;">{{ c.rfq_id }}</code>
+                            <code style="color: #e879f9; font-size: 0.75rem;">{{ c.comparison_id }}</code>
+                        </div>
+                    </td>
+                    <td>
+                        <div style="font-weight: 600; color: var(--text-main); font-size: 0.8125rem;">
+                            {{ c.supplier_count }} supplier{{ 's' if c.supplier_count != 1 else '' }}
+                        </div>
+                        {% if c.supplier_names_str and c.supplier_names_str != '—' %}
+                        <div style="font-size: 0.7rem; color: var(--text-muted); max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ c.supplier_names_str }}">
+                            {{ c.supplier_names_str }}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="font-weight: 700; color: var(--success); font-size: 0.875rem;">
+                            {{ c.l1_supplier }}
+                        </div>
+                    </td>
+                    <td>
+                        <div style="font-family: var(--font-mono); font-weight: 700; font-size: 0.875rem; color: var(--text-main);">
+                            {% if c.l1_landed_cost != '—' %}
+                                {{ c.base_currency }} {{ c.l1_landed_cost }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td style="font-size: 0.75rem; color: var(--text-muted);">
+                        {{ c.created_at[:16].replace('T', ' ') if c.created_at else '—' }}
+                    </td>
+                    <td style="text-align: right;">
+                        <a href="/comparisons/{{ c.comparison_id }}" class="btn btn-primary btn-sm" style="font-size: 0.75rem; padding: 0.25rem 0.65rem;">
+                            Open Matrix &rarr;
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Search No Matches Empty State -->
+<div id="comp-no-matches-card" class="card" style="display: none; text-align: center; padding: 3.5rem 1.5rem; border-top: 3px solid var(--accent);">
+    <div style="font-size: 2rem; margin-bottom: 0.5rem;">🔍</div>
+    <h2 style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.5rem;">
+        No Comparisons Match Your Search
+    </h2>
+    <p style="font-size: 0.8125rem; color: var(--text-muted); max-width: 480px; margin: 0 auto 1.25rem auto; line-height: 1.6;">
+        No evaluation matrices match query <strong id="comp-no-match-query" style="color: var(--text-main);"></strong>.
+    </p>
+    <div style="display: flex; justify-content: center; gap: 0.75rem;">
+        <button type="button" onclick="clearCompSearch()" class="btn btn-secondary btn-sm">
+            Clear Search
+        </button>
+        <a href="/comparisons/create" class="btn btn-primary btn-sm">
+            + Create New Comparison
+        </a>
+    </div>
+</div>
+
+{% else %}
+<!-- Clean Zero-State: No comparisons exist anywhere -->
+<div class="card" style="text-align: center; padding: 4rem 1.5rem; border-top: 3px solid var(--accent);">
+    <div style="font-size: 2.2rem; margin-bottom: 0.75rem;">⚖️</div>
+    <h2 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.5rem;">
+        No Comparisons Yet
+    </h2>
+    <p style="font-size: 0.875rem; color: var(--text-muted); max-width: 520px; margin: 0 auto 1.5rem auto; line-height: 1.6;">
+        Comparisons will appear after supplier quotations have been evaluated against RFQ requirements.
+    </p>
+    <div style="display: flex; justify-content: center; gap: 1rem;">
+        <a href="/comparisons/create" class="btn btn-primary" style="padding: 0.5rem 1.3rem; font-size: 0.875rem;">
+            + Create Comparison
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<script>
+let currentCompQuery = '';
+
+function onCompSearchInput(query) {
+    currentCompQuery = (query || '').trim().toLowerCase();
+    const clearBtn = document.getElementById('comp-search-clear');
+    if (clearBtn) {
+        clearBtn.style.display = currentCompQuery ? 'block' : 'none';
+    }
+    applyCompFilters();
+}
+
+function onCompSearchKey(event) {
+    if (event.key === 'Escape') {
+        clearCompSearch();
+    }
+}
+
+function clearCompSearch() {
+    const input = document.getElementById('comp-search');
+    if (input) {
+        input.value = '';
+    }
+    onCompSearchInput('');
+}
+
+function applyCompFilters() {
+    const rows = document.querySelectorAll('.comp-row');
+    if (!rows.length) return;
+
+    let visibleCount = 0;
+    const query = currentCompQuery;
+
+    rows.forEach(row => {
+        const rfqTitle = row.getAttribute('data-rfq-title') || '';
+        const rfqId = row.getAttribute('data-rfq-id') || '';
+        const compId = row.getAttribute('data-comp-id') || '';
+        const l1 = row.getAttribute('data-l1') || '';
+        const suppliers = row.getAttribute('data-suppliers') || '';
+
+        let passes = true;
+        if (query) {
+            passes = (
+                rfqTitle.includes(query) ||
+                rfqId.includes(query) ||
+                compId.includes(query) ||
+                l1.includes(query) ||
+                suppliers.includes(query)
+            );
+        }
+
+        if (passes) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    const displayedCountEl = document.getElementById('comp-displayed-count');
+    const tableCountEl = document.getElementById('comp-table-count');
+    if (displayedCountEl) displayedCountEl.innerText = visibleCount;
+    if (tableCountEl) tableCountEl.innerText = visibleCount;
+
+    const tableCard = document.getElementById('comp-table-card');
+    const noMatchesCard = document.getElementById('comp-no-matches-card');
+    const noMatchQuery = document.getElementById('comp-no-match-query');
+
+    if (visibleCount === 0) {
+        if (tableCard) tableCard.style.display = 'none';
+        if (noMatchesCard) noMatchesCard.style.display = 'block';
+        if (noMatchQuery) {
+            noMatchQuery.innerText = `"${query}"`;
+        }
+    } else {
+        if (tableCard) tableCard.style.display = 'block';
+        if (noMatchesCard) noMatchesCard.style.display = 'none';
+    }
+}
+
+// Keyboard shortcut '/' to focus search
+document.addEventListener('keydown', function(e) {
+    if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        const searchInput = document.getElementById('comp-search');
+        if (searchInput) {
+            searchInput.focus();
+            searchInput.select();
+        }
+    }
+});
+</script>
+{% endblock %}

@@ -1,9 +1,10 @@
-﻿"""
+"""
 PDF Document Parser (Enhanced).
 Extracts text blocks, page structure, and candidate quotation tables from digitally born PDFs.
 Provides clear diagnostics and explicit warnings when table structures cannot be reliably segmented.
 """
 
+import logging
 from pathlib import Path
 import re
 from typing import List, Optional, Tuple
@@ -20,21 +21,53 @@ from parsers.base import (
     TextBlock,
     compute_file_hash,
 )
+from parsers.docling_adapter import DoclingAdapter, is_docling_available
+
+logger = logging.getLogger(__name__)
 
 
 class PDFParser(BaseDocumentParser):
-    """Parses PDF documents into format-agnostic DocumentAST with diagnostic warnings."""
+    """
+    Parses PDF documents into format-agnostic DocumentAST.
+    Delegates to DoclingAdapter as the preferred layout-aware parser when available,
+    with deterministic fallback to the legacy pypdf text-heuristic parser.
+    """
 
     COMMON_HEADER_KEYWORDS = [
         "description", "item", "part", "qty", "quantity", "rate", "price",
         "amount", "uom", "unit", "hsn", "sku", "particulars", "specification"
     ]
 
+    def __init__(self, prefer_docling: bool = True):
+        self.prefer_docling = prefer_docling
+
     def parse(self, file_path: Path) -> DocumentAST:
         file_path = Path(file_path)
         if not file_path.exists():
             raise FileNotFoundError(f"PDF file not found: {file_path}")
 
+        # 1. Preferred Docling extraction path
+        fallback_reason: Optional[str] = None
+        if self.prefer_docling and is_docling_available():
+            try:
+                adapter = DoclingAdapter()
+                ast = adapter.parse(file_path)
+                return ast
+            except Exception as e:
+                fallback_reason = f"Docling execution failed: {str(e)}"
+                logger.warning(f"{fallback_reason}. Falling back to legacy PDF parser.")
+        elif self.prefer_docling:
+            fallback_reason = "Docling not installed in environment (optional dependency)"
+
+        # 2. Deterministic Legacy pypdf Parser Fallback
+        ast = self._parse_legacy(file_path)
+        ast.metadata["parser_used"] = "pypdf_fallback" if (self.prefer_docling and fallback_reason) else "pypdf"
+        if fallback_reason:
+            ast.metadata["fallback_reason"] = fallback_reason
+
+        return ast
+
+    def _parse_legacy(self, file_path: Path) -> DocumentAST:
         file_hash = compute_file_hash(file_path)
         reader = pypdf.PdfReader(str(file_path))
 
@@ -83,6 +116,7 @@ class PDFParser(BaseDocumentParser):
             pages=pages,
             tables=all_tables,
             metadata={
+                "parser_used": "pypdf",
                 "page_count": len(reader.pages),
                 "total_text_chars": total_text_length,
                 "warnings": warnings

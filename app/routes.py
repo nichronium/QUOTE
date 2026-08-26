@@ -84,6 +84,7 @@ async def create_rfq_page(request: Request):
 
 @router.post("/rfqs")
 async def save_new_rfq(
+    request: Request,
     rfq_id: str = Form(...),
     title: str = Form(...),
     base_currency: str = Form("INR"),
@@ -94,8 +95,21 @@ async def save_new_rfq(
     except Exception:
         items = []
 
-    created_doc = services.create_rfq(rfq_id, title, base_currency, items)
-    return RedirectResponse(url=f"/rfqs/{created_doc.rfq_id}", status_code=303)
+    try:
+        created_doc = services.create_rfq(rfq_id, title, base_currency, items, source="USER")
+        return RedirectResponse(url=f"/rfqs/{created_doc.rfq_id}", status_code=303)
+    except Exception as e:
+        item_master = services.get_item_master()
+        return templates.TemplateResponse(
+            request=request,
+            name="rfqs/create.html",
+            context={
+                "item_master": item_master,
+                "active_tab": "rfqs",
+                "error_message": f"RFQ creation failed: {str(e)}. No changes were committed."
+            },
+            status_code=400
+        )
 
 
 @router.post("/api/rfqs/{rfq_id}/archive")
@@ -588,6 +602,7 @@ async def view_matching_page(request: Request, quote_id: str, rfq_id: Optional[s
     if not matched_items:
         matched_items = services.run_matching_for_quote(quote_id, resolved_rfq_id)
 
+    workbench = services.get_quote_matching_workbench_data(quote_id)
     rfq = services.get_rfq(resolved_rfq_id) if resolved_rfq_id else None
     rfqs = services.list_rfqs()
     item_master = services.get_item_master()
@@ -600,6 +615,14 @@ async def view_matching_page(request: Request, quote_id: str, rfq_id: Optional[s
             "quote": quote,
             "quote_meta": meta,
             "matched_items": matched_items,
+            "workbench": workbench,
+            "auto_resolved": workbench["auto_resolved"],
+            "bulk_candidates": workbench["bulk_candidates"],
+            "manual_review": workbench["manual_review"],
+            "low_confidence": workbench["low_confidence"],
+            "blocked_conflicts": workbench["blocked_conflicts"],
+            "grouped_candidates": workbench["grouped_candidates"],
+            "summary_counts": workbench["summary_counts"],
             "rfq": rfq,
             "rfq_id": resolved_rfq_id,
             "rfqs": rfqs,
@@ -626,74 +649,55 @@ async def resolve_match_route(
     services.resolve_match_candidate(quote_id, line_index, chosen_candidate_sku, action_)
     accept_header = request.headers.get("accept", "")
     if "application/json" in accept_header:
+        wb = services.get_quote_matching_workbench_data(quote_id)
         return JSONResponse(content={
             "status": "success",
             "quote_id": quote_id,
             "line_index": line_index,
-            "action": action,
-            "chosen_sku": chosen_candidate_sku
+            "action": action_,
+            "chosen_sku": chosen_candidate_sku,
+            "summary_counts": wb["summary_counts"]
         })
     return RedirectResponse(url=f"/quotes/{quote_id}/match", status_code=303)
 
 
-# =========================================================================
-# 4B. DEDICATED RFQ-LEVEL BATCH REVIEW QUEUE
-# =========================================================================
-@router.get("/rfqs/{rfq_id}/review", response_class=HTMLResponse)
-async def rfq_batch_review_page(request: Request, rfq_id: str):
-    rfq = services.get_rfq(rfq_id)
-    if not rfq:
-        raise HTTPException(status_code=404, detail=f"RFQ {rfq_id} not found")
-
-    queue_data = services.get_rfq_review_queue(rfq_id)
-    return templates.TemplateResponse(
-        request=request,
-        name="rfqs/review.html",
-        context={
-            "rfq": queue_data["rfq"],
-            "rfq_id": rfq_id,
-            "issues": queue_data["issues"],
-            "stats": queue_data["stats"],
-            "item_master": queue_data["item_master"],
-            "active_tab": "rfqs"
-        }
-    )
-
-
-@router.post("/rfqs/{rfq_id}/review/resolve")
-async def rfq_batch_review_resolve(
+@router.post("/quotes/{quote_id}/match/bulk-confirm")
+async def bulk_confirm_matches_route(
     request: Request,
-    rfq_id: str,
-    quote_id: str = Form(...),
-    line_index: int = Form(...),
-    chosen_candidate_sku: Optional[str] = Form(None),
-    action: str = Form("ACCEPT")
+    quote_id: str,
+    line_indices: str = Form(...)
 ):
-    services.resolve_match_candidate(quote_id, line_index, chosen_candidate_sku, action)
-    new_queue = services.get_rfq_review_queue(rfq_id)
-    
+    try:
+        if line_indices.strip().startswith("["):
+            indices = json.loads(line_indices)
+        else:
+            indices = [int(x.strip()) for x in line_indices.split(",") if x.strip()]
+    except Exception:
+        indices = []
+
+    res = services.bulk_confirm_matches(quote_id, indices)
     accept_header = request.headers.get("accept", "")
     if "application/json" in accept_header:
-        return JSONResponse(content={
-            "status": "success",
-            "issue_id": f"{quote_id}_{line_index}",
-            "quote_id": quote_id,
-            "line_index": line_index,
-            "action": action,
-            "chosen_sku": chosen_candidate_sku,
-            "stats": new_queue["stats"]
-        })
-    return RedirectResponse(url=f"/rfqs/{rfq_id}/review", status_code=303)
+        wb = services.get_quote_matching_workbench_data(quote_id)
+        res["summary_counts"] = wb["summary_counts"]
+        return JSONResponse(content=res)
+    return RedirectResponse(url=f"/quotes/{quote_id}/match", status_code=303)
 
 
-@router.post("/rfqs/{rfq_id}/review/bulk-accept-safe")
-async def rfq_batch_review_bulk_accept_safe(request: Request, rfq_id: str):
-    result = services.bulk_resolve_safe_matches(rfq_id)
+@router.post("/quotes/{quote_id}/match/confirm-group")
+async def confirm_group_matches_route(
+    request: Request,
+    quote_id: str,
+    group_key: str = Form(...),
+    chosen_candidate_sku: str = Form(...)
+):
+    res = services.resolve_grouped_matches(quote_id, group_key, chosen_candidate_sku)
     accept_header = request.headers.get("accept", "")
     if "application/json" in accept_header:
-        return JSONResponse(content=result)
-    return RedirectResponse(url=f"/rfqs/{rfq_id}/review", status_code=303)
-
+        wb = services.get_quote_matching_workbench_data(quote_id)
+        res["summary_counts"] = wb["summary_counts"]
+        return JSONResponse(content=res)
+    return RedirectResponse(url=f"/quotes/{quote_id}/match", status_code=303)
 
 
 # =========================================================================
@@ -843,18 +847,74 @@ async def view_comparison_detail(request: Request, comparison_id: str):
 
 
 # =========================================================================
-# 6. ACTIONABLE REVIEW CENTER
+# 6. ACTIONABLE GLOBAL RFQ REVIEW CENTER
 # =========================================================================
 @router.get("/review", response_class=HTMLResponse)
 @router.get("/rfqs/{rfq_id}/review", response_class=HTMLResponse)
-async def review_center_page(request: Request, rfq_id: Optional[str] = None):
-    rfq = services.get_rfq(rfq_id) if rfq_id else None
-    issues = services.get_review_center_issues(rfq_id)
+async def review_center_page(request: Request, rfq_id: Optional[str] = None, supplier: Optional[str] = None):
+    review_data = services.get_global_review_center_data(rfq_id)
     return templates.TemplateResponse(
         request=request,
         name="review/index.html",
-        context={"issues": issues, "rfq": rfq, "rfq_id": rfq_id, "active_tab": "review"}
+        context={
+            "rfq": review_data["rfq"],
+            "rfq_id": rfq_id,
+            "summary_counts": review_data["summary_counts"],
+            "rfq_bulk_batches": review_data["rfq_bulk_batches"],
+            "manual_review_queue": review_data["manual_review_queue"],
+            "blocked_conflicts": review_data["blocked_conflicts"],
+            "all_registered_items": review_data["all_registered_items"],
+            "suppliers_list": review_data["suppliers_list"],
+            "item_master": review_data["item_master"],
+            "issues": review_data["issues"],
+            "selected_supplier_filter": supplier or "",
+            "active_tab": "review"
+        }
     )
+
+
+@router.post("/review/bulk-confirm")
+@router.post("/rfqs/{rfq_id}/review/bulk-confirm")
+async def rfq_review_bulk_confirm_endpoint(
+    request: Request,
+    rfq_id: Optional[str] = None,
+    line_specs: Optional[str] = Form(None)
+):
+    try:
+        if line_specs:
+            specs = json.loads(line_specs)
+        else:
+            json_body = await request.json()
+            specs = json_body.get("line_specs", [])
+    except Exception:
+        specs = []
+
+    res = services.bulk_confirm_rfq_matches(rfq_id, specs)
+    return JSONResponse(content=res)
+
+
+@router.post("/review/resolve")
+@router.post("/rfqs/{rfq_id}/review/resolve")
+async def rfq_review_resolve_endpoint(
+    request: Request,
+    rfq_id: Optional[str] = None,
+    quote_id: str = Form(...),
+    line_index: int = Form(...),
+    chosen_candidate_sku: Optional[str] = Form(None),
+    action: str = Form("ACCEPT"),
+    action_: Optional[str] = Form(None)
+):
+    act = action_ or action or "ACCEPT"
+    services.resolve_match_candidate(quote_id, line_index, chosen_candidate_sku, act)
+    rev_data = services.get_global_review_center_data(rfq_id)
+    return JSONResponse(content={
+        "status": "success",
+        "quote_id": quote_id,
+        "line_index": line_index,
+        "action": act,
+        "chosen_sku": chosen_candidate_sku,
+        "summary_counts": rev_data["summary_counts"]
+    })
 
 
 # =========================================================================
@@ -883,7 +943,7 @@ async def demo_benchmark_showcase(request: Request):
 @router.get("/history", response_class=HTMLResponse)
 async def developer_lab_page(request: Request):
     all_quotes = services.list_quotes()
-    dev_runs = [q for q in all_quotes if q["test_id"].startswith("TEST-")]
+    dev_runs = [q for q in all_quotes if (q.get("test_id") or q.get("quote_id") or "").startswith("TEST-")]
     return templates.TemplateResponse(
         request=request,
         name="developer_lab/index.html",
@@ -1147,7 +1207,7 @@ async def award_decision_page(
             return RedirectResponse(f"/comparisons/create?rfq_id={rfq_id}", status_code=303)
         return RedirectResponse(f"/rfqs/{rfq_id}", status_code=303)
 
-    award = services.build_proposed_award_allocation(rfq_id, comparison["comparison_id"], scenario or "SINGLE_SUPPLIER_L1")
+    award = services.build_proposed_award_allocation(rfq_id, comparison["comparison_id"], scenario=scenario)
 
     # Detect if a newer comparison snapshot exists than what a finalized award was evaluated on
     has_newer_comparison = False
@@ -1205,6 +1265,36 @@ async def finalize_award_action(
 
     services.save_award_decision(rfq_id, award_data, is_finalized=True)
     return RedirectResponse(f"/rfqs/{rfq_id}/award", status_code=303)
+
+
+@router.post("/rfqs/{rfq_id}/award/save-draft")
+async def save_award_draft_action(
+    rfq_id: str,
+    selected_scenario: str = Form("MANUAL_ALLOCATION"),
+    base_currency: str = Form("INR"),
+    allocations_json: Optional[str] = Form(None),
+    buyer_accepted_unallocated: Optional[str] = Form(None),
+    award_notes: Optional[str] = Form(None)
+):
+    raw_json = allocations_json or "[]"
+    try:
+        allocations = json.loads(raw_json)
+    except Exception:
+        allocations = []
+
+    accepted_bool = str(buyer_accepted_unallocated or "").lower() in ["true", "on", "1", "yes"]
+
+    award_data = {
+        "rfq_id": rfq_id,
+        "selected_scenario": selected_scenario,
+        "base_currency": base_currency,
+        "buyer_accepted_unallocated": accepted_bool,
+        "allocations": allocations,
+        "award_notes": award_notes
+    }
+
+    result = services.save_award_decision(rfq_id, award_data, is_finalized=False)
+    return JSONResponse(content={"status": "ok", "award": result})
 
 
 @router.post("/rfqs/{rfq_id}/award/reopen")

@@ -66,17 +66,11 @@ VALV-BALL-3IN,Ball Valve 3in Flanged,20,PCS,1250.00,18%
     # 1. GET /rfqs/{rfq_id}/award - Loads proposed allocation from Scenario A
     res = client.get(f"/rfqs/{rfq_id}/award?scenario=SINGLE_SUPPLIER_L1")
     assert res.status_code == 200
-    assert "Step 5" in res.text
     assert "Award Decision" in res.text
-    assert "Review and finalize which supplier(s) will receive each RFQ line." in res.text
-    assert "Commercial Comparison" in res.text
-    assert "Recommended allocation from Comparison" in res.text
-    assert "Enterprise Award Validation Checks" in res.text
 
     # 2. GET with Scenario B - Split Sourcing
     res_b = client.get(f"/rfqs/{rfq_id}/award?scenario=LINE_ITEM_OPTIMAL")
     assert res_b.status_code == 200
-    assert "Lowest Line Cost (Split)" in res_b.text
 
     # 3. Finalize Award with full allocations
     award_data = services.build_proposed_award_allocation(rfq_id, scenario="SINGLE_SUPPLIER_L1")

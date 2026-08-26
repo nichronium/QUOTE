@@ -183,14 +183,15 @@ class QuoteExtractor:
             status=FieldStatus.CONFIRMED if meta.get("quote_date") else FieldStatus.MISSING
         )
 
+        curr_val = meta.get("currency")
         currency_evidence = FieldEvidence(
-            raw_value=meta.get("currency"),
-            normalized_value=meta.get("currency"),
+            raw_value=curr_val,
+            normalized_value=curr_val,
             source_file=ast.source_file_name,
-            extraction_method="currency_normalizer",
-            evidence_signals=["Resolved from currency symbol/text token"],
-            confidence=0.95,
-            status=FieldStatus.CONFIRMED
+            extraction_method="currency_normalizer" if curr_val else "missing_field",
+            evidence_signals=["Resolved from currency symbol/text token"] if curr_val else ["Currency not specified in document"],
+            confidence=0.95 if curr_val else 0.0,
+            status=FieldStatus.CONFIRMED if curr_val else FieldStatus.MISSING
         )
 
         initial_quote = CanonicalQuote(
@@ -417,19 +418,22 @@ class QuoteExtractor:
         qty_str = get_cell("qty")
         price_str = get_cell("unit_price")
 
-        quoted_qty = normalize_decimal(qty_str, default=Decimal("1.0"))
-        unit_price = normalize_decimal(price_str, default=Decimal("0.0"))
+        quoted_qty = normalize_decimal(qty_str, default=None)
+        if quoted_qty is not None and quoted_qty <= Decimal("0.0"):
+            quoted_qty = None
 
-        if unit_price == Decimal("0.0") and len(cells) > 1:
+        unit_price = normalize_decimal(price_str, default=None)
+        if unit_price is None and "unit_price" not in col_map and len(cells) > 1:
             for i, c in enumerate(cells):
                 if i != col_map.get("qty") and i != col_map.get("description"):
-                    val = normalize_decimal(c)
-                    if val > Decimal("0.0"):
+                    val = normalize_decimal(c, default=None)
+                    if val is not None and val > Decimal("0.0"):
                         unit_price = val
                         price_str = c
                         break
 
-        uom = normalize_uom(get_cell("uom"))
+        uom_str = get_cell("uom")
+        uom = normalize_uom(uom_str, default=None)
         part_number = (
             get_cell("supplier_part_number")
             or get_cell("manufacturer_part_number")
@@ -439,16 +443,15 @@ class QuoteExtractor:
         hsn_code = get_cell("hsn")
         discount = normalize_decimal(get_cell("discount"), default=Decimal("0.0"))
 
-
         # Compound Tax Handling (CGST, SGST, IGST, CESS, or unified Tax)
         tax_components: List[TaxComponent] = []
-        cgst_val = normalize_decimal(get_cell("cgst"), default=Decimal("0.0"))
-        sgst_val = normalize_decimal(get_cell("sgst"), default=Decimal("0.0"))
-        igst_val = normalize_decimal(get_cell("igst"), default=Decimal("0.0"))
-        cess_val = normalize_decimal(get_cell("cess"), default=Decimal("0.0"))
-        unified_tax_val = normalize_decimal(get_cell("tax"), default=Decimal("0.0"))
+        cgst_val = normalize_decimal(get_cell("cgst"), default=None)
+        sgst_val = normalize_decimal(get_cell("sgst"), default=None)
+        igst_val = normalize_decimal(get_cell("igst"), default=None)
+        cess_val = normalize_decimal(get_cell("cess"), default=None)
+        unified_tax_val = normalize_decimal(get_cell("tax"), default=None)
 
-        if cgst_val > Decimal("0.0") or "cgst" in col_map:
+        if cgst_val is not None and cgst_val > Decimal("0.0"):
             cgst_ref = get_cell_reference(row.row_index, col_map["cgst"]) if "cgst" in col_map else None
             tax_components.append(TaxComponent(
                 tax_type="CGST",
@@ -466,7 +469,7 @@ class QuoteExtractor:
                 )
             ))
 
-        if sgst_val > Decimal("0.0") or "sgst" in col_map:
+        if sgst_val is not None and sgst_val > Decimal("0.0"):
             sgst_ref = get_cell_reference(row.row_index, col_map["sgst"]) if "sgst" in col_map else None
             tax_components.append(TaxComponent(
                 tax_type="SGST",
@@ -484,7 +487,7 @@ class QuoteExtractor:
                 )
             ))
 
-        if igst_val > Decimal("0.0") or "igst" in col_map:
+        if igst_val is not None and igst_val > Decimal("0.0"):
             igst_ref = get_cell_reference(row.row_index, col_map["igst"]) if "igst" in col_map else None
             tax_components.append(TaxComponent(
                 tax_type="IGST",
@@ -502,7 +505,7 @@ class QuoteExtractor:
                 )
             ))
 
-        if cess_val > Decimal("0.0") or "cess" in col_map:
+        if cess_val is not None and cess_val > Decimal("0.0"):
             cess_ref = get_cell_reference(row.row_index, col_map["cess"]) if "cess" in col_map else None
             tax_components.append(TaxComponent(
                 tax_type="CESS",
@@ -521,9 +524,10 @@ class QuoteExtractor:
             ))
 
         # Compute total aggregate tax rate
+        tax_rate: Optional[Decimal] = None
         if tax_components:
             tax_rate = sum(c.rate_pct for c in tax_components)
-        elif unified_tax_val > Decimal("0.0"):
+        elif unified_tax_val is not None:
             tax_rate = unified_tax_val
             tax_components.append(TaxComponent(
                 tax_type="GST",
@@ -541,8 +545,9 @@ class QuoteExtractor:
                 )
             ))
         else:
-            tax_rate = detect_tax_rate(row.raw_text)
-            if tax_rate > Decimal("0.0"):
+            detected_rate = detect_tax_rate(row.raw_text)
+            if detected_rate is not None and detected_rate > Decimal("0.0"):
+                tax_rate = detected_rate
                 tax_components.append(TaxComponent(
                     tax_type="GST",
                     rate_pct=tax_rate,
@@ -605,41 +610,80 @@ class QuoteExtractor:
             status=FieldStatus.CONFIRMED
         )
 
-        qty_ev = FieldEvidence(
-            raw_value=qty_str,
-            normalized_value=quoted_qty,
-            source_file=source_file_name,
-            sheet_name=sheet_name,
-            cell_range=get_cell_reference(row.row_index, col_map.get("qty", 0)) if "qty" in col_map else None,
-            extraction_method="column_cell" if "qty" in col_map else "default_quantity",
-            evidence_signals=["Extracted from quantity column"] if "qty" in col_map else ["Defaulted to 1.0"],
-            confidence=0.95 if "qty" in col_map else 0.50,
-            status=FieldStatus.CONFIRMED if "qty" in col_map else FieldStatus.INFERRED
-        )
+        if quoted_qty is not None:
+            qty_ev = FieldEvidence(
+                raw_value=qty_str,
+                normalized_value=quoted_qty,
+                source_file=source_file_name,
+                sheet_name=sheet_name,
+                cell_range=get_cell_reference(row.row_index, col_map.get("qty", 0)) if "qty" in col_map else None,
+                extraction_method="column_cell" if "qty" in col_map else "row_numeric_scan",
+                evidence_signals=["Extracted from quantity column"],
+                confidence=0.95,
+                status=FieldStatus.CONFIRMED
+            )
+        else:
+            qty_ev = FieldEvidence(
+                raw_value=qty_str,
+                normalized_value=None,
+                source_file=source_file_name,
+                sheet_name=sheet_name,
+                cell_range=None,
+                extraction_method="missing_field",
+                evidence_signals=["Quantity not specified in document"],
+                confidence=0.0,
+                status=FieldStatus.MISSING
+            )
 
-        uom_ev = FieldEvidence(
-            raw_value=get_cell("uom"),
-            normalized_value=uom,
-            source_file=source_file_name,
-            sheet_name=sheet_name,
-            cell_range=get_cell_reference(row.row_index, col_map.get("uom", 0)) if "uom" in col_map else None,
-            extraction_method="uom_registry_normalization",
-            evidence_signals=[f"Normalized UOM '{get_cell('uom')}' -> '{uom}'"],
-            confidence=0.95 if uom in STANDARD_UOM_SET else 0.70,
-            status=FieldStatus.CONFIRMED if uom in STANDARD_UOM_SET else FieldStatus.INFERRED
-        )
+        if uom is not None:
+            uom_ev = FieldEvidence(
+                raw_value=uom_str,
+                normalized_value=uom,
+                source_file=source_file_name,
+                sheet_name=sheet_name,
+                cell_range=get_cell_reference(row.row_index, col_map.get("uom", 0)) if "uom" in col_map else None,
+                extraction_method="uom_registry_normalization",
+                evidence_signals=[f"Normalized UOM '{uom_str}' -> '{uom}'"],
+                confidence=0.95 if uom in STANDARD_UOM_SET else 0.70,
+                status=FieldStatus.CONFIRMED if uom in STANDARD_UOM_SET else FieldStatus.INFERRED
+            )
+        else:
+            uom_ev = FieldEvidence(
+                raw_value=uom_str,
+                normalized_value=None,
+                source_file=source_file_name,
+                sheet_name=sheet_name,
+                cell_range=None,
+                extraction_method="missing_field",
+                evidence_signals=["UOM not specified in document"],
+                confidence=0.0,
+                status=FieldStatus.MISSING
+            )
 
-        price_ev = FieldEvidence(
-            raw_value=price_str,
-            normalized_value=unit_price,
-            source_file=source_file_name,
-            sheet_name=sheet_name,
-            cell_range=get_cell_reference(row.row_index, col_map.get("unit_price", 0)) if "unit_price" in col_map else None,
-            extraction_method="column_cell" if "unit_price" in col_map else "row_numeric_scan",
-            evidence_signals=["Extracted from unit rate/price column"],
-            confidence=0.95 if unit_price > Decimal("0.0") else 0.20,
-            status=FieldStatus.CONFIRMED if unit_price > Decimal("0.0") else FieldStatus.MISSING
-        )
+        if unit_price is not None:
+            price_ev = FieldEvidence(
+                raw_value=price_str,
+                normalized_value=unit_price,
+                source_file=source_file_name,
+                sheet_name=sheet_name,
+                cell_range=get_cell_reference(row.row_index, col_map.get("unit_price", 0)) if "unit_price" in col_map else None,
+                extraction_method="column_cell" if "unit_price" in col_map else "row_numeric_scan",
+                evidence_signals=["Extracted from unit rate/price column"],
+                confidence=0.95 if unit_price > Decimal("0.0") else 0.20,
+                status=FieldStatus.CONFIRMED if unit_price > Decimal("0.0") else FieldStatus.MISSING
+            )
+        else:
+            price_ev = FieldEvidence(
+                raw_value=price_str,
+                normalized_value=None,
+                source_file=source_file_name,
+                sheet_name=sheet_name,
+                cell_range=None,
+                extraction_method="missing_field",
+                evidence_signals=["Unit price not specified in document"],
+                confidence=0.0,
+                status=FieldStatus.MISSING
+            )
 
         discount_ev = FieldEvidence(
             raw_value=get_cell("discount"),
@@ -654,33 +698,62 @@ class QuoteExtractor:
         )
 
         # Total tax evidence
-        tax_sig = [f"Total aggregate tax rate {tax_rate}%"]
-        if tax_components:
-            tax_sig.append(f"Components: {', '.join(f'{c.tax_type} {c.rate_pct}%' for c in tax_components)}")
-        tax_ev = FieldEvidence(
-            raw_value=get_cell("tax") or str(tax_rate),
-            normalized_value=tax_rate,
-            source_file=source_file_name,
-            sheet_name=sheet_name,
-            cell_range=get_cell_reference(row.row_index, col_map.get("tax", 0)) if "tax" in col_map else None,
-            extraction_method="compound_tax_sum" if len(tax_components) > 1 else ("column_cell" if "tax" in col_map else "regex_tax_detection"),
-            evidence_signals=tax_sig,
-            confidence=0.95 if (tax_components or "tax" in col_map) else 0.85,
-            status=FieldStatus.CONFIRMED if (tax_components or "tax" in col_map) else FieldStatus.INFERRED
-        )
+        if tax_rate is not None:
+            tax_sig = [f"Total aggregate tax rate {tax_rate}%"]
+            if tax_components:
+                tax_sig.append(f"Components: {', '.join(f'{c.tax_type} {c.rate_pct}%' for c in tax_components)}")
+            tax_ev = FieldEvidence(
+                raw_value=get_cell("tax") or str(tax_rate),
+                normalized_value=tax_rate,
+                source_file=source_file_name,
+                sheet_name=sheet_name,
+                cell_range=get_cell_reference(row.row_index, col_map.get("tax", 0)) if "tax" in col_map else None,
+                extraction_method="compound_tax_sum" if len(tax_components) > 1 else ("column_cell" if "tax" in col_map else "regex_tax_detection"),
+                evidence_signals=tax_sig,
+                confidence=0.95 if (tax_components or "tax" in col_map) else 0.85,
+                status=FieldStatus.CONFIRMED if (tax_components or "tax" in col_map) else FieldStatus.INFERRED
+            )
+        else:
+            tax_ev = FieldEvidence(
+                raw_value=get_cell("tax"),
+                normalized_value=None,
+                source_file=source_file_name,
+                sheet_name=sheet_name,
+                cell_range=None,
+                extraction_method="missing_field",
+                evidence_signals=["Tax rate not specified in document"],
+                confidence=0.0,
+                status=FieldStatus.MISSING
+            )
 
-        line_landed = quantize_currency((quoted_qty * unit_price * (Decimal("1.0") - discount / Decimal("100.0"))) * (Decimal("1.0") + tax_rate / Decimal("100.0")))
-        line_tot_ev = FieldEvidence(
-            raw_value=str(line_landed),
-            normalized_value=line_landed,
-            source_file=source_file_name,
-            sheet_name=sheet_name,
-            cell_range=cell_ref,
-            extraction_method="financial_engine_decimal",
-            evidence_signals=["Computed by pure Decimal line arithmetic invariant"],
-            confidence=0.99,
-            status=FieldStatus.CONFIRMED
-        )
+        if quoted_qty is not None and unit_price is not None:
+            disc_mult = (Decimal("1.0") - (discount / Decimal("100.0"))) if discount is not None else Decimal("1.0")
+            tax_mult = (Decimal("1.0") + (tax_rate / Decimal("100.0"))) if tax_rate is not None else Decimal("1.0")
+            line_landed = quantize_currency((quoted_qty * unit_price * disc_mult) * tax_mult)
+            line_tot_ev = FieldEvidence(
+                raw_value=str(line_landed),
+                normalized_value=line_landed,
+                source_file=source_file_name,
+                sheet_name=sheet_name,
+                cell_range=cell_ref,
+                extraction_method="financial_engine_decimal",
+                evidence_signals=["Computed by pure Decimal line arithmetic invariant"],
+                confidence=0.99,
+                status=FieldStatus.CONFIRMED
+            )
+        else:
+            line_landed = None
+            line_tot_ev = FieldEvidence(
+                raw_value=None,
+                normalized_value=None,
+                source_file=source_file_name,
+                sheet_name=sheet_name,
+                cell_range=cell_ref,
+                extraction_method="missing_field",
+                evidence_signals=["Line landed cost cannot be calculated due to missing quantity or unit price"],
+                confidence=0.0,
+                status=FieldStatus.MISSING
+            )
 
         sku_ev = None
         sku_col_idx = (
@@ -704,7 +777,6 @@ class QuoteExtractor:
                 status=FieldStatus.CONFIRMED
             )
         else:
-
             # Conservative SKU prefix extraction fallback from item description (A3)
             sku_match = re.match(r"^([A-Z0-9]{2,}[-_/][A-Z0-9-_/]+|[A-Z]{2,}\d{2,}(?:[-_/][A-Z0-9]+)*)\b", description.strip())
             if sku_match:
@@ -735,11 +807,11 @@ class QuoteExtractor:
             raw_description=description,
             supplier_part_number=part_number,
             hsn_sac_code=hsn_code,
-            quoted_qty=quoted_qty if quoted_qty > Decimal("0.0") else Decimal("1.0"),
+            quoted_qty=quoted_qty,
             quoted_uom=uom,
             unit_price=unit_price,
             discount_pct=discount,
-            tax_rate_pct=tax_rate,
+            tax_rate_pct=tax_rate if tax_rate is not None else Decimal("0.0"),
             tax_components=tax_components,
             lead_time_days=lead_time,
             confidence_score=item_confidence,
@@ -754,19 +826,24 @@ class QuoteExtractor:
             line_total_evidence=line_tot_ev
         )
 
-
     def _calculate_item_confidence(
-        self, description: str, qty: Decimal, uom: str, price: Decimal, tax_rate: Decimal, part_no: Optional[str]
+        self,
+        description: str,
+        qty: Optional[Decimal],
+        uom: Optional[str],
+        price: Optional[Decimal],
+        tax_rate: Optional[Decimal],
+        part_no: Optional[str]
     ) -> float:
         score = 0.0
 
         if description and len(description.strip()) >= 3 and not description.strip().isdigit():
             score += 0.25
 
-        if price > Decimal("0.0"):
+        if price is not None and price > Decimal("0.0"):
             score += 0.25
 
-        if qty > Decimal("0.0"):
+        if qty is not None and qty > Decimal("0.0"):
             score += 0.15
 
         if uom and uom.upper() in STANDARD_UOM_SET:
@@ -774,7 +851,7 @@ class QuoteExtractor:
         elif uom:
             score += 0.05
 
-        if tax_rate > Decimal("0.0"):
+        if tax_rate is not None and tax_rate > Decimal("0.0"):
             score += 0.10
 
         if part_no and len(part_no.strip()) >= 2:

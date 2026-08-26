@@ -70,24 +70,24 @@ class CommercialChargeExtractor:
             charge_type = self._classify_charge_type(first_cell)
 
             if charge_type:
-                amount = Decimal("0.0")
-                tax_rate = Decimal("0.0")
+                amount: Optional[Decimal] = None
+                tax_rate: Decimal = Decimal("0.0")
 
                 if col_amt_idx != -1 and col_amt_idx < len(row.cells) and row.cells[col_amt_idx].strip():
                     amount = normalize_decimal(row.cells[col_amt_idx])
                 else:
                     for c in cells[1:]:
                         val = normalize_decimal(c)
-                        if val > Decimal("0.0"):
+                        if val is not None and val > Decimal("0.0"):
                             amount = val
                             break
 
                 if col_tax_idx != -1 and col_tax_idx < len(row.cells) and row.cells[col_tax_idx].strip():
-                    tax_rate = normalize_decimal(row.cells[col_tax_idx])
+                    tax_rate = normalize_decimal(row.cells[col_tax_idx], default=Decimal("0.0")) or Decimal("0.0")
                 else:
-                    tax_rate = detect_tax_rate(row_text)
+                    tax_rate = detect_tax_rate(row_text) or Decimal("0.0")
 
-                if amount > Decimal("0.0"):
+                if amount is not None and amount > Decimal("0.0"):
                     sheet = row.sheet_name or table.sheet_name
                     prov = Provenance(
                         page_number=row.page_number,
@@ -117,13 +117,13 @@ class CommercialChargeExtractor:
                     )
                     tax_ev = FieldEvidence(
                         raw_value=str(tax_rate),
-                        normalized_value=tax_rate,
+                        normalized_value=tax_rate if tax_rate > Decimal("0.0") else None,
                         sheet_name=sheet,
                         cell_range=f"R{row.row_index}",
                         extraction_method="column_cell" if col_tax_idx != -1 else "regex_tax_detection",
-                        evidence_signals=[f"Tax rate {tax_rate}% detected on charge"],
-                        confidence=0.95 if col_tax_idx != -1 else 0.85,
-                        status=FieldStatus.CONFIRMED if col_tax_idx != -1 else FieldStatus.INFERRED
+                        evidence_signals=[f"Tax rate {tax_rate}% detected on charge"] if tax_rate > Decimal("0.0") else ["No explicit tax detected on charge"],
+                        confidence=0.95 if col_tax_idx != -1 else (0.85 if tax_rate > Decimal("0.0") else 0.50),
+                        status=FieldStatus.CONFIRMED if col_tax_idx != -1 else (FieldStatus.INFERRED if tax_rate > Decimal("0.0") else FieldStatus.MISSING)
                     )
                     charges.append(AdditionalCharge(
                         charge_type=charge_type,
@@ -158,7 +158,7 @@ class CommercialChargeExtractor:
                     tax_rate = Decimal("0.0")
 
                     if i + 1 < len(parts):
-                        val = normalize_decimal(parts[i + 1])
+                        val = normalize_decimal(parts[i + 1], default=Decimal("0.0"))
                         if val > Decimal("0.0"):
                             amount = val
                     
@@ -168,12 +168,12 @@ class CommercialChargeExtractor:
                             amount = Decimal(match.group(1))
 
                     if i + 2 < len(parts):
-                        tax_val = normalize_decimal(parts[i + 2])
+                        tax_val = normalize_decimal(parts[i + 2], default=Decimal("0.0"))
                         if tax_val > Decimal("0.0") and tax_val <= Decimal("40.0"):
                             tax_rate = tax_val
 
                     if tax_rate <= Decimal("0.0"):
-                        tax_rate = detect_tax_rate(line_str)
+                        tax_rate = detect_tax_rate(line_str) or Decimal("0.0")
 
                     if amount > Decimal("0.0"):
                         prov = Provenance(
@@ -201,12 +201,12 @@ class CommercialChargeExtractor:
                         )
                         tax_ev = FieldEvidence(
                             raw_value=str(tax_rate),
-                            normalized_value=tax_rate,
+                            normalized_value=tax_rate if tax_rate > Decimal("0.0") else None,
                             sheet_name=sheet_name,
                             extraction_method="regex_tax_detection",
-                            evidence_signals=[f"Tax rate {tax_rate}% detected on charge"],
-                            confidence=0.85,
-                            status=FieldStatus.INFERRED
+                            evidence_signals=[f"Tax rate {tax_rate}% detected on charge"] if tax_rate > Decimal("0.0") else ["No explicit tax detected on charge"],
+                            confidence=0.85 if tax_rate > Decimal("0.0") else 0.50,
+                            status=FieldStatus.INFERRED if tax_rate > Decimal("0.0") else FieldStatus.MISSING
                         )
                         charges.append(AdditionalCharge(
                             charge_type=charge_type,

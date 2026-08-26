@@ -1,4 +1,4 @@
-﻿"""
+"""
 Normalization Utilities.
 Transforms extracted strings into clean, typed canonical representations
 (Decimals, Dates, Standardized UOMs, Currencies) using centralized registries.
@@ -14,7 +14,7 @@ from dateutil import parser as date_parser
 from extraction.semantic_registry import CURRENCY_MAP, UOM_MAP
 
 
-def normalize_decimal(val: Optional[str], default: Decimal = Decimal("0.0")) -> Decimal:
+def normalize_decimal(val: Optional[str], default: Optional[Decimal] = None) -> Optional[Decimal]:
     """
     Safely extracts and parses numeric string to Decimal.
     Isolates numeric tokens without stripping whitespace globally across column boundaries.
@@ -39,7 +39,7 @@ def normalize_decimal(val: Optional[str], default: Decimal = Decimal("0.0")) -> 
     return default
 
 
-def normalize_uom(val: Optional[str], default: str = "PCS") -> str:
+def normalize_uom(val: Optional[str], default: Optional[str] = None) -> Optional[str]:
     """Normalizes raw UOM strings into standardized canonical codes."""
     if not val:
         return default
@@ -53,7 +53,7 @@ def normalize_uom(val: Optional[str], default: str = "PCS") -> str:
     return val.upper().strip() if val else default
 
 
-def normalize_currency(val: Optional[str], default: str = "INR") -> str:
+def normalize_currency(val: Optional[str], default: Optional[str] = None) -> Optional[str]:
     """Normalizes currency symbols/strings into ISO codes."""
     if not val:
         return default
@@ -74,10 +74,10 @@ def parse_flexible_date(val: Optional[str]) -> Optional[date]:
         return None
 
 
-def detect_tax_rate(text: str) -> Decimal:
+def detect_tax_rate(text: str) -> Optional[Decimal]:
     """Extracts explicit tax or GST percentage from text snippets."""
     if not text:
-        return Decimal("0.0")
+        return None
     match = re.search(r"(?:gst|tax|igst|cgst\+sgst)[\s#.:/-]*(\d+(?:\.\d+)?)%", text, re.IGNORECASE)
     if match:
         return Decimal(match.group(1))
@@ -87,4 +87,4 @@ def detect_tax_rate(text: str) -> Decimal:
         if match_pct:
             return Decimal(match_pct.group(1))
 
-    return Decimal("0.0")
+    return None

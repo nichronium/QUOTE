@@ -281,6 +281,19 @@
             </tbody>
         </table>
     </div>
+    {% if not items %}
+    <div id="no-items-empty-state" style="text-align: center; padding: 3.5rem 1.5rem; color: var(--text-muted);">
+        <div style="font-size: 2rem; margin-bottom: 0.5rem;">📦</div>
+        <div style="font-weight: 700; font-size: 1.1rem; color: var(--text-main); margin-bottom: 0.25rem;">No Catalog Products Registered</div>
+        <p style="font-size: 0.8125rem; color: var(--text-muted); max-width: 480px; margin: 0 auto 1.25rem auto; line-height: 1.6;">
+            Your Item Master catalog is currently empty. Add products manually or import your catalog from an Excel/CSV spreadsheet.
+        </p>
+        <div style="display: flex; justify-content: center; gap: 0.75rem;">
+            <a href="/item-master/create" class="btn btn-primary btn-sm">+ Add Single Item</a>
+            <a href="/item-master/import" class="btn btn-secondary btn-sm">📁 Import Catalog (Excel/CSV)</a>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <!-- Deactivate Item Confirmation Modal -->

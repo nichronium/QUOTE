@@ -223,16 +223,24 @@
                                 <code style="color: var(--accent); font-size: 0.75rem;">{{ item.supplier_part_number or '—' }}</code>
                             </td>
                             <td style="text-align: right; font-family: var(--font-mono); font-weight: 600;">
-                                {{ item.quoted_qty }}
+                                {{ item.quoted_qty if item.quoted_qty is not none else '—' }}
                             </td>
                             <td>
+                                {% if item.quoted_uom %}
                                 <span class="badge badge-info">{{ item.quoted_uom }}</span>
+                                {% else %}
+                                <span style="color: var(--text-muted);">—</span>
+                                {% endif %}
                             </td>
                             <td style="text-align: right; font-family: var(--font-mono); font-weight: 600;">
-                                {{ item.unit_price }}
+                                {{ item.unit_price if item.unit_price is not none else '—' }}
                             </td>
                             <td style="text-align: right; font-family: var(--font-mono); font-weight: 700; color: var(--text-main);">
+                                {% if item.quoted_qty is not none and item.unit_price is not none %}
                                 {{ "%.2f"|format(item.quoted_qty * item.unit_price) }}
+                                {% else %}
+                                <span style="color: var(--text-muted);">—</span>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}

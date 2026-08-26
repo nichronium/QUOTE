@@ -323,21 +323,33 @@ class MetadataResolver:
 
     def _resolve_currency(
         self, ast: DocumentAST, table: Optional[ExtractedTable], col_map: Dict[str, int], kv_pairs: List[Tuple[str, str, str]]
-    ) -> str:
+    ) -> Optional[str]:
         if table and "currency" in col_map:
             col_idx = col_map["currency"]
             values = [r.cells[col_idx].strip() for r in table.rows if col_idx < len(r.cells) and r.cells[col_idx].strip()]
             if values:
-                return normalize_currency(values[0])
+                norm = normalize_currency(values[0], default=None)
+                if norm:
+                    return norm
+
+        for k, v, src in kv_pairs:
+            k_clean = k.lower().strip()
+            if "currency" in k_clean:
+                v_clean = self._clean_field_value(v)
+                norm = normalize_currency(v_clean, default=None)
+                if norm:
+                    return norm
 
         text = ast.full_text
-        if "₹" in text or "INR" in text or "Rs." in text:
+        if "₹" in text or "INR" in text or "Rs." in text or "rs" in text.lower():
             return "INR"
         if "$" in text or "USD" in text:
             return "USD"
         if "€" in text or "EUR" in text:
             return "EUR"
-        return "INR"
+        if "£" in text or "GBP" in text:
+            return "GBP"
+        return None
 
     def _resolve_commercial_terms(
         self, ast: DocumentAST, table: Optional[ExtractedTable], kv_pairs: List[Tuple[str, str, str]]

@@ -284,20 +284,48 @@ class RowClassifier:
         if any(h in raw_text for h in ["description", "unit price", "basic rate", "qty", "quantity", "uom", "part no", "part number", "sku"]):
             return RowType.HEADER
 
-        # --- Continuation Row: description present, but no numeric quantity and no numeric price
+        # --- Continuation Row check:
+        # A row is only a continuation if it lacks numeric quantity and numeric price
+        # AND lacks its own independent line identity (line number or SKU / part number).
         has_qty = False
         has_price = False
+        has_ident = False
+
         if "qty" in col_map and col_map["qty"] < len(row.cells):
             val = row.cells[col_map["qty"]].strip()
             if val and re.search(r"\d", val):
                 has_qty = True
+
         if "unit_price" in col_map and col_map["unit_price"] < len(row.cells):
             val = row.cells[col_map["unit_price"]].strip()
             if val and re.search(r"\d", val):
                 has_price = True
 
-        if not has_qty and not has_price:
+        # Check for explicit identifier (part number / SKU)
+        for ident_key in ["supplier_part_number", "manufacturer_part_number", "internal_sku", "part_number"]:
+            if ident_key in col_map and col_map[ident_key] < len(row.cells):
+                val = row.cells[col_map[ident_key]].strip()
+                if val and (self._looks_like_identifier(val) or len(val) >= 2):
+                    has_ident = True
+                    break
+
+        # Check for line index / item number in first cell or line column
+        if not has_ident and len(row.cells) > 0:
+            first_cell = row.cells[0].strip()
+            if re.fullmatch(r"\d{1,4}\.?", first_cell):
+                has_ident = True
+
+        if not has_qty and not has_price and not has_ident:
             return RowType.CONTINUATION
 
         return RowType.ITEM
+
+    def _looks_like_identifier(self, val: str) -> bool:
+        v = val.strip()
+        if len(v) < 2 or len(v) > 40:
+            return False
+        has_digit = any(c.isdigit() for c in v)
+        has_alpha = any(c.isalpha() for c in v)
+        has_punct = any(c in "-_./#" for c in v)
+        return (has_digit and has_alpha) or (has_alpha and has_punct) or (has_digit and has_punct)
 

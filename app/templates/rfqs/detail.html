@@ -365,15 +365,32 @@
                                 <span class="badge badge-success" style="font-size: 0.65rem;">100% Scope</span>
                             {% elif q.coverage_state == 'PARTIAL' %}
                                 <span class="badge badge-info" style="font-size: 0.65rem;">Partial Scope</span>
-                            {% elif q.processing_status == 'REVIEW_NEEDED' %}
-                                <span class="badge badge-warning" style="font-size: 0.65rem;">Review Needed</span>
+                            {% elif q.unresolved_count > 0 %}
+                                <span class="badge badge-warning" style="font-size: 0.65rem;">Review Required</span>
                             {% endif %}
                         </div>
-                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; line-height: 1.35;">
-                            <span>{{ q.lines_extracted_count }} supplier lines extracted</span> &bull; 
-                            <strong style="color: var(--text-main);">{{ q.rfq_items_matched }} matched to RFQ</strong>
-                            {% if q.extra_lines_count > 0 %}
-                                &bull; <span style="color: var(--text-muted);">{{ q.extra_lines_count }} unmatched / extra</span>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; line-height: 1.4;">
+                            <span>{{ q.lines_extracted_count }} extracted</span> &bull; 
+                            <strong style="color: var(--text-main);">{{ q.rfq_items_matched }} resolved to RFQ</strong>
+                            {% if q.outside_scope_count > 0 %}
+                                &bull; <span style="color: var(--text-muted);">{{ q.outside_scope_count }} outside RFQ scope</span>
+                            {% endif %}
+                        </div>
+                        <div style="display: flex; gap: 0.25rem; flex-wrap: wrap; margin-top: 0.35rem;">
+                            {% if q.auto_resolved_count > 0 %}
+                                <span class="badge badge-success" style="font-size: 0.65rem; padding: 0.15rem 0.4rem;">{{ q.auto_resolved_count }} Auto-Resolved</span>
+                            {% endif %}
+                            {% if q.bulk_ready_count > 0 %}
+                                <span class="badge" style="background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid #3b82f6; font-size: 0.65rem; padding: 0.15rem 0.4rem;">{{ q.bulk_ready_count }} Bulk-Ready</span>
+                            {% endif %}
+                            {% if q.manual_review_count > 0 %}
+                                <span class="badge badge-warning" style="font-size: 0.65rem; padding: 0.15rem 0.4rem;">{{ q.manual_review_count }} Manual-Review</span>
+                            {% endif %}
+                            {% if q.blocked_conflicts_count > 0 %}
+                                <span class="badge badge-danger" style="font-size: 0.65rem; padding: 0.15rem 0.4rem;">{{ q.blocked_conflicts_count }} Blocked</span>
+                            {% endif %}
+                            {% if q.unmatched_count > 0 %}
+                                <span class="badge badge-muted" style="font-size: 0.65rem; padding: 0.15rem 0.4rem;">{{ q.unmatched_count }} Unmatched</span>
                             {% endif %}
                         </div>
                     </td>
@@ -387,10 +404,10 @@
                         {% endif %}
                     </td>
                     <td>
-                        {% if q.processing_status == 'READY_FOR_COMPARISON' %}
+                        {% if q.unresolved_count == 0 and q.rfq_items_matched > 0 %}
                             <span class="badge badge-success">Ready for Comparison</span>
-                        {% elif q.processing_status == 'REVIEW_NEEDED' %}
-                            <span class="badge badge-warning">Review Needed ({{ q.review_count }})</span>
+                        {% elif q.unresolved_count > 0 %}
+                            <span class="badge badge-warning">Review Required ({{ q.unresolved_count }})</span>
                         {% elif q.processing_status == 'NO_MATCHED_ITEMS' %}
                             <span class="badge badge-muted">0 RFQ Items Matched</span>
                         {% else %}
@@ -398,13 +415,16 @@
                         {% endif %}
                     </td>
                     <td style="text-align: right;">
-                        <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end;">
-                            <a href="/quotes/{{ q.test_id }}" class="btn btn-secondary btn-sm">
+                        <div style="display: inline-flex; gap: 0.35rem; justify-content: flex-end; align-items: center; flex-wrap: wrap;">
+                            <a href="/quotes/{{ q.test_id }}" class="btn btn-secondary btn-xs" title="View extracted quote data">
                                 View Data
                             </a>
-                            {% if q.review_count > 0 %}
-                            <a href="/rfqs/{{ rfq.rfq_id }}/review" class="btn btn-primary btn-sm">
-                                Review Queue ({{ q.review_count }})
+                            <a href="/quotes/{{ q.test_id }}/match" class="btn btn-secondary btn-xs" title="Supplier-specific batch review & alignment">
+                                Resolve / Batch Review
+                            </a>
+                            {% if q.unresolved_count > 0 %}
+                            <a href="/rfqs/{{ rfq.rfq_id }}/review?supplier={{ q.supplier_name }}" class="btn btn-primary btn-xs" style="font-weight: 700; background: #2563eb;" title="Open Global Review Center filtered to this vendor">
+                                Review in Center ({{ q.unresolved_count }})
                             </a>
                             {% endif %}
                         </div>

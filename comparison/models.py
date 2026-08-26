@@ -187,6 +187,8 @@ class RFQDocument(BaseModel):
     title: str
     base_currency: str = "INR"
     status: str = "DRAFT"  # "DRAFT" | "OPEN" | "AWARDED" | "CLOSED" | "CANCELLED" | "ARCHIVED"
+    source: str = "USER"    # "USER" | "DEMO" | "TEST"
+    is_test: bool = False
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     archived_at: Optional[str] = None

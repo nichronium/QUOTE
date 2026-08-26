@@ -277,29 +277,37 @@ class QuoteReconciler:
     def _validate_item(self, item: QuoteItem, report: ValidationReport):
         prefix = f"items[{item.line_index}]"
 
-        if item.unit_price <= Decimal("0.0"):
+        if item.unit_price is None or item.unit_price <= Decimal("0.0"):
             report.issues.append(ValidationIssue(
                 field_path=f"{prefix}.unit_price",
                 message=f"Unit price is zero or missing for '{item.raw_description}'.",
                 severity=Severity.HIGH,
-                actual_value=str(item.unit_price)
+                actual_value=str(item.unit_price) if item.unit_price is not None else None
             ))
 
-        if item.quoted_qty <= Decimal("0.0"):
+        if item.quoted_qty is None or item.quoted_qty <= Decimal("0.0"):
             report.issues.append(ValidationIssue(
                 field_path=f"{prefix}.quoted_qty",
-                message="Quoted quantity must be greater than zero.",
+                message="Quoted quantity is missing or zero.",
                 severity=Severity.HIGH,
-                actual_value=str(item.quoted_qty)
+                actual_value=str(item.quoted_qty) if item.quoted_qty is not None else None
             ))
 
-        clean_uom = item.quoted_uom.upper().strip()
-        if clean_uom not in STANDARD_UOM_SET:
+        if item.quoted_uom:
+            clean_uom = item.quoted_uom.upper().strip()
+            if clean_uom not in STANDARD_UOM_SET:
+                report.issues.append(ValidationIssue(
+                    field_path=f"{prefix}.quoted_uom",
+                    message=f"Unrecognized or non-standard UOM '{item.quoted_uom}'.",
+                    severity=Severity.MEDIUM,
+                    actual_value=item.quoted_uom
+                ))
+        else:
             report.issues.append(ValidationIssue(
                 field_path=f"{prefix}.quoted_uom",
-                message=f"Unrecognized or non-standard UOM '{item.quoted_uom}'.",
-                severity=Severity.MEDIUM,
-                actual_value=item.quoted_uom
+                message="UOM not specified in document.",
+                severity=Severity.LOW,
+                actual_value=None
             ))
 
         if len(item.raw_description.strip()) < 2:

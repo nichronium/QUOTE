@@ -24,6 +24,12 @@
         </p>
     </div>
 
+    {% if error_message %}
+    <div class="card" style="border-left: 4px solid var(--danger); background: rgba(239, 68, 68, 0.12); color: #f87171; padding: 1rem 1.25rem; margin-bottom: 1.25rem; font-size: 0.875rem; font-weight: 600;">
+        {{ error_message }}
+    </div>
+    {% endif %}
+
     <form action="/rfqs" method="POST" id="rfq-form" onsubmit="return validateRfqForm();">
         <!-- 1. RFQ Details Header Card -->
         <div class="card" style="border-top: 3px solid var(--accent); margin-bottom: 1.25rem;">

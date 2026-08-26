@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Review &amp; Item Alignment: {{ quote.supplier_raw_name }} — RFQ {{ rfq.rfq_id if rfq else '' }}{% endblock %}
+{% block title %}Enterprise Matching Workbench: {{ quote.supplier_raw_name }} — RFQ {{ rfq.rfq_id if rfq else '' }}{% endblock %}
 
 {% block content %}
 <!-- Breadcrumb Bar -->
@@ -14,63 +14,16 @@
         {% endif %}
         <a href="/quotes/{{ quote_id }}">{{ quote.supplier_raw_name }}</a>
         <span class="breadcrumb-separator">/</span>
-        <span class="breadcrumb-current">Review &amp; Product Alignment</span>
+        <span class="breadcrumb-current">Human-in-the-Loop Matching Workbench</span>
     </div>
     <div style="display: flex; gap: 0.5rem; align-items: center;">
         {% if rfq %}
-        <a href="/rfqs/{{ rfq.rfq_id }}" class="btn btn-secondary btn-sm">&larr; Back to RFQ Workspace</a>
+        <a href="/rfqs/{{ rfq.rfq_id }}" class="btn btn-secondary btn-sm">&larr; RFQ Workspace</a>
         {% endif %}
-        <a href="/quotes/{{ quote_id }}" class="btn btn-secondary btn-sm">&larr; Back to Quotation</a>
+        <a href="/quotes/{{ quote_id }}" class="btn btn-secondary btn-sm">&larr; Quotation Details</a>
         <a href="/comparisons/create?rfq_id={{ rfq.rfq_id if rfq else '' }}" class="btn btn-success btn-sm">
             Proceed to Commercial Comparison &rarr;
         </a>
-    </div>
-</div>
-
-<!-- Compact 5-Step Progression Stepper -->
-<div class="card" style="padding: 0.85rem 1.25rem; margin-bottom: 1.25rem; background: var(--bg-card); border: 1px solid var(--border-color);">
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-        <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
-            <!-- Stage 1 -->
-            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; font-weight: 700; color: var(--text-main);">
-                <span class="badge badge-success" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">1</span>
-                <span>RFQ Scope</span>
-            </div>
-            <span style="color: var(--text-subtle);">&rarr;</span>
-
-            <!-- Stage 2 -->
-            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; font-weight: 700; color: var(--text-main);">
-                <span class="badge badge-success" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">2</span>
-                <span>Supplier Quotes</span>
-            </div>
-            <span style="color: var(--text-subtle);">&rarr;</span>
-
-            <!-- Stage 3 -->
-            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; font-weight: 700; color: var(--accent);">
-                <span class="badge badge-info" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">3</span>
-                <span>Review &amp; Matching Active</span>
-            </div>
-            <span style="color: var(--text-subtle);">&rarr;</span>
-
-            <!-- Stage 4 -->
-            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; color: var(--text-muted);">
-                <span class="badge badge-muted" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">4</span>
-                <span>Comparison</span>
-            </div>
-            <span style="color: var(--text-subtle);">&rarr;</span>
-
-            <!-- Stage 5 -->
-            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; color: var(--text-muted);">
-                <span class="badge badge-muted" style="border-radius: 50%; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">5</span>
-                <span>Award</span>
-            </div>
-        </div>
-
-        <div>
-            <a href="/comparisons/create?rfq_id={{ rfq.rfq_id if rfq else '' }}" class="btn btn-success btn-sm">
-                Next: Compare Quotations &rarr;
-            </a>
-        </div>
     </div>
 </div>
 
@@ -79,22 +32,27 @@
     <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
         <div>
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
-                <span class="badge badge-info">Quotation Review &amp; Alignment</span>
+                <span class="badge badge-info">Matching Workbench</span>
                 {% if rfq %}
                 <code style="color: var(--accent); font-weight: 700; font-size: 0.8125rem;">Target RFQ: {{ rfq.rfq_id }} &bull; {{ rfq.title }}</code>
                 {% endif %}
                 <code style="color: var(--text-muted); font-size: 0.8125rem;">Quotation ID: {{ quote_id }}</code>
             </div>
             <h1 style="font-size: 1.4rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.25rem;">
-                {{ quote.supplier_raw_name }} &bull; Item Master Alignment
+                {{ quote.supplier_raw_name }} &bull; Item Master Alignment &amp; Review Workbench
             </h1>
-
-            <p style="font-size: 0.8125rem; color: var(--text-muted); max-width: 800px; line-height: 1.5;">
-                Review each supplier quote line mapped to standard Item Master products and RFQ lines. Original document descriptions, quantities, and unit prices remain 100% immutable.
+            <p style="font-size: 0.8125rem; color: var(--text-muted); max-width: 850px; line-height: 1.5; margin: 0;">
+                Universal multi-signal product intelligence engine. Evaluates exact part numbers, normalized descriptions, brand alignment, specification compatibility, and historical procurement memory. Review proposed decisions in bulk or through the continuous review queue.
             </p>
         </div>
 
         <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <form action="/quotes/{{ quote_id }}/match/run" method="POST" style="margin: 0;">
+                <input type="hidden" name="rfq_id" value="{{ rfq_id or '' }}">
+                <button type="submit" class="btn btn-secondary btn-sm" title="Re-run automatic multi-signal scoring while preserving locked human decisions">
+                    &#x21bb; Re-evaluate Matches
+                </button>
+            </form>
             <a href="/comparisons/create?rfq_id={{ rfq.rfq_id if rfq else '' }}" class="btn btn-success btn-sm">
                 Proceed to Commercial Comparison &rarr;
             </a>
@@ -102,14 +60,300 @@
     </div>
 </div>
 
-<!-- Matching & Issues Table -->
-<div class="card">
-    <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem;">
+<!-- Decision Band Summary Metrics -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+    <!-- Metric 1: Total Lines -->
+    <div class="card" style="padding: 1rem; text-align: center; border-top: 3px solid var(--border-color); background: var(--bg-card);">
+        <div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: var(--text-muted); margin-bottom: 0.25rem;">
+            Total Quoted Lines
+        </div>
+        <div id="stat-total" style="font-size: 1.8rem; font-weight: 900; color: var(--text-main);">
+            {{ summary_counts.total }}
+        </div>
+        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem;">
+            100% Provenance Tracked
+        </div>
+    </div>
+
+    <!-- Metric 2: High Confidence (Auto-Resolved) -->
+    <div class="card" style="padding: 1rem; text-align: center; border-top: 3px solid var(--success); background: var(--bg-card);">
+        <div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: var(--success); margin-bottom: 0.25rem;">
+            Auto-Resolved (&ge;95%)
+        </div>
+        <div id="stat-auto-resolved" style="font-size: 1.8rem; font-weight: 900; color: var(--success);">
+            {{ summary_counts.auto_resolved }}
+        </div>
+        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem;">
+            No action required (0 human clicks)
+        </div>
+    </div>
+
+    <!-- Metric 3: Bulk Ready -->
+    <div class="card" style="padding: 1rem; text-align: center; border-top: 3px solid #3b82f6; background: var(--bg-card);">
+        <div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #3b82f6; margin-bottom: 0.25rem;">
+            Bulk Ready (80–94%)
+        </div>
+        <div id="stat-bulk-candidates" style="font-size: 1.8rem; font-weight: 900; color: #3b82f6;">
+            {{ summary_counts.bulk_candidates }}
+        </div>
+        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem;">
+            {{ summary_counts.bulk_candidates }} Lines in {{ bulk_batches|length }} Decision Batches
+        </div>
+    </div>
+
+    <!-- Metric 4: Manual Review -->
+    <div class="card" style="padding: 1rem; text-align: center; border-top: 3px solid var(--warning); background: var(--bg-card);">
+        <div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: var(--warning); margin-bottom: 0.25rem;">
+            Manual Review (50–79%)
+        </div>
+        <div id="stat-manual-review" style="font-size: 1.8rem; font-weight: 900; color: var(--warning);">
+            {{ summary_counts.manual_review }}
+        </div>
+        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem;">
+            {% if summary_counts.manual_review > 0 %}{{ summary_counts.manual_review }} in Continuous Queue{% else %}No unresolved guided reviews{% endif %}
+        </div>
+    </div>
+
+    <!-- Metric 5: Blocked Conflicts -->
+    <div class="card" style="padding: 1rem; text-align: center; border-top: 3px solid var(--danger); background: var(--bg-card);">
+        <div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: var(--danger); margin-bottom: 0.25rem;">
+            Blocked Conflicts
+        </div>
+        <div id="stat-blocked-conflicts" style="font-size: 1.8rem; font-weight: 900; color: var(--danger);">
+            {{ summary_counts.blocked_conflicts }}
+        </div>
+        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem;">
+            {% if summary_counts.blocked_conflicts > 0 %}{{ summary_counts.blocked_conflicts }} Hard Conflict Overrides{% else %}No hard conflicts{% endif %}
+        </div>
+    </div>
+
+    <!-- Metric 6: Unmatched -->
+    <div class="card" style="padding: 1rem; text-align: center; border-top: 3px solid var(--text-muted); background: var(--bg-card);">
+        <div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: var(--text-muted); margin-bottom: 0.25rem;">
+            Unmatched / Low Conf
+        </div>
+        <div id="stat-low-confidence" style="font-size: 1.8rem; font-weight: 900; color: var(--text-muted);">
+            {{ summary_counts.low_confidence }}
+        </div>
+        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem;">
+            {% if summary_counts.low_confidence > 0 %}{{ summary_counts.low_confidence }} Non-Catalog Exceptions{% else %}No unresolved exceptions{% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- SECTION 1: SYSTEM-PREPARED BULK DECISIONS (80% - 94%)                      -->
+<!-- ========================================================================= -->
+<div id="bulk-confirmation-section" class="card" style="border-top: 3px solid #3b82f6; margin-bottom: 1.5rem; background: var(--bg-card); display: {% if bulk_candidates %}block{% else %}none{% endif %};">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
         <div>
-            <div class="card-title">Extracted Quote Items &amp; Resolution Actions ({{ matched_items|length }})</div>
-            <div style="font-size: 0.8125rem; color: var(--text-muted);">
-                Resolved items participate in line-level normalized commercial comparison.
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span class="badge" style="background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid #3b82f6; font-weight: 800;">
+                    SYSTEM-PREPARED BULK DECISIONS
+                </span>
+                <span class="card-title" style="font-size: 1rem; margin: 0;">
+                    <span id="bulk-total-header-count">{{ summary_counts.bulk_candidates }}</span> eligible quotation lines across <span id="bulk-batch-count">{{ bulk_batches|length }}</span> proposed decision batches
+                </span>
             </div>
+            <div style="font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.2rem;">
+                {{ bulk_batches|length }} human confirmation decision{% if bulk_batches|length != 1 %}s{% endif %} will resolve {{ summary_counts.bulk_candidates }} supplier quotation lines. Zero individual checkbox selection required.
+            </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button type="button" class="btn btn-primary btn-sm" id="btn-confirm-all-bulk" style="font-weight: 800; background: #2563eb;" onclick="openConfirmAllBulkModal()">
+                ✓ Confirm All Eligible Batches — <span id="bulk-all-selected-count">{{ summary_counts.bulk_candidates }}</span> Lines / <span id="bulk-all-batches-count">{{ bulk_batches|length }}</span> Batches
+            </button>
+        </div>
+    </div>
+
+    <div style="padding: 1rem;" id="bulk-batches-container">
+        {% for b in bulk_batches %}
+        <div class="card bulk-batch-card" id="batch-card-{{ b.batch_id }}" style="border: 1px solid var(--border-color); background: var(--bg-body); border-radius: 8px; margin-bottom: 1rem; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <!-- Batch Header Bar -->
+            <div style="padding: 0.875rem 1.25rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; background: var(--bg-card); border-bottom: 1px solid var(--border-color);">
+                <div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <span class="badge" style="background: rgba(59, 130, 246, 0.15); color: #3b82f6; font-weight: 700; font-size: 0.75rem;">
+                            BATCH PROPOSAL
+                        </span>
+                        <span style="font-size: 0.75rem; font-weight: 700; color: var(--success);">
+                            ✓ 0 Hard Conflicts
+                        </span>
+                    </div>
+                    <div style="font-size: 0.95rem; font-weight: 800; color: var(--text-main);">
+                        {{ b.count }} lines proposed as: 
+                        <span style="color: var(--accent);">{{ b.supplier_name }}{% if b.supplier_pn %} (PN: {{ b.supplier_pn }}){% endif %} &rarr; {{ b.proposed_sku }}</span>
+                    </div>
+                    <div style="font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.15rem;">
+                        {{ b.proposed_description }} &bull; Confidence: <strong style="color: #3b82f6;">{{ b.confidence_display }}</strong> &bull; Stocking UOM: <strong>{{ b.stocking_uom }}</strong>
+                    </div>
+                </div>
+
+                <!-- Batch Action Buttons -->
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-batch-{{ b.batch_id }}" onclick="toggleBatchDetails('{{ b.batch_id }}')">
+                        &#x25be; Review {{ b.count }} proposed matches
+                    </button>
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-confirm-batch-{{ b.batch_id }}" style="font-weight: 700;" onclick="openBatchConfirmModal('{{ b.batch_id }}', '{{ b.proposed_sku }}', {{ b.count }})">
+                        ✓ Confirm <span id="batch-selected-counter-{{ b.batch_id }}">{{ b.count }}</span> matches
+                    </button>
+                </div>
+            </div>
+
+            <!-- Expandable Detailed Lines (Selected by default) -->
+            <div id="batch-table-container-{{ b.batch_id }}" style="display: none; padding: 0.75rem 1.25rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; font-size: 0.75rem; color: var(--text-muted);">
+                    <div>All lines in this batch are selected by default. Deselect any exceptional line if needed:</div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button type="button" class="btn btn-secondary btn-xs" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;" onclick="toggleBatchCheckboxes('{{ b.batch_id }}', true)">Select All</button>
+                        <button type="button" class="btn btn-secondary btn-xs" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;" onclick="toggleBatchCheckboxes('{{ b.batch_id }}', false)">Deselect All</button>
+                    </div>
+                </div>
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.8125rem;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid var(--border-color); text-align: left; color: var(--text-muted); font-size: 0.75rem;">
+                            <th style="width: 40px; text-align: center;">Sel</th>
+                            <th style="width: 60px;">Line #</th>
+                            <th style="min-width: 200px;">Supplier Quoted Item</th>
+                            <th style="width: 100px;">Confidence</th>
+                            <th style="min-width: 200px;">Evidence Checklist</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in b.items %}
+                        <tr id="batch-row-{{ item.quote_item.line_index }}" style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td style="text-align: center;">
+                                <input type="checkbox" class="batch-item-check-{{ b.batch_id }} bulk-global-check" value="{{ item.quote_item.line_index }}" checked onchange="updateBatchSelectedCount('{{ b.batch_id }}')">
+                            </td>
+                            <td><code>#{{ item.quote_item.line_index + 1 }}</code></td>
+                            <td>
+                                <strong style="color: var(--text-main);">{{ item.quote_item.raw_description }}</strong>
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">
+                                    Qty: {{ item.quote_item.quoted_qty or '—' }} {{ item.quote_item.quoted_uom or '' }} @ {{ quote.currency }} {{ item.quote_item.unit_price }}
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge" style="background: rgba(59, 130, 246, 0.15); color: #3b82f6; font-weight: 700;">
+                                    {{ "%.0f"|format((item.item_master_match.match_score if item.item_master_match else 0) * 100) }}%
+                                </span>
+                            </td>
+                            <td>
+                                <div style="display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.75rem;">
+                                    {% for ev in item.evidence_checklist %}
+                                    <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                        {% if ev.status == 'PASS' %}
+                                            <span style="color: var(--success); font-weight: 800;">✓</span>
+                                        {% elif ev.status == 'WARNING' %}
+                                            <span style="color: var(--warning); font-weight: 800;">⚠</span>
+                                        {% elif ev.status == 'FAIL' %}
+                                            <span style="color: var(--danger); font-weight: 800;">✗</span>
+                                        {% else %}
+                                            <span style="color: var(--text-muted);">ℹ</span>
+                                        {% endif %}
+                                        <span>{{ ev.description }}</span>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- SECTION 2: GROUPED IDENTICAL DECISIONS                                     -->
+<!-- ========================================================================= -->
+<div id="grouped-decisions-section" class="card" style="border-top: 3px solid #8b5cf6; margin-bottom: 1.5rem; background: var(--bg-card); display: {% if grouped_candidates %}block{% else %}none{% endif %};">
+    <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="badge" style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6; border: 1px solid #8b5cf6;">GROUPED DECISION SHORTCUT</span>
+            <span class="card-title" style="font-size: 1rem; margin: 0;">Group Identical Proposed Mappings ({{ grouped_candidates|length }} Groups)</span>
+        </div>
+        <div style="font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.2rem;">
+            Identical supplier lines quoting the same description with equivalent evidence. Confirming a group resolves all occurrences simultaneously.
+        </div>
+    </div>
+
+    <div class="grid-container" id="grouped-cards-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; padding: 1rem;">
+        {% for grp in grouped_candidates %}
+        <div class="card group-card" id="group-card-{{ loop.index }}" style="border: 1px solid var(--border-color); background: var(--bg-body); padding: 1rem; display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+                    <span class="badge badge-info" style="font-size: 0.75rem;">{{ grp.count }} Occurrences</span>
+                    <span class="badge badge-success" style="font-size: 0.75rem;">{{ grp.confidence_pct }}% Match</span>
+                </div>
+                <div style="font-size: 0.875rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.25rem;">
+                    "{{ grp.description }}"
+                </div>
+                <div style="font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+                    &rarr; Proposed: <strong style="color: var(--accent);">{{ grp.proposed_sku }}</strong> &bull; {{ grp.proposed_description }}
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+                    Lines: {% for idx in grp.line_indices %}<code>#{{ idx + 1 }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+                </div>
+            </div>
+
+            <button type="button" class="btn btn-primary btn-sm" style="width: 100%; margin-top: 0.5rem;" onclick="confirmGroupAction('{{ grp.group_key }}', '{{ grp.proposed_sku }}', 'group-card-{{ loop.index }}')">
+                ✓ Confirm Group ({{ grp.count }} Lines)
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+<!-- SECTION 3: CONTINUOUS MANUAL REVIEW QUEUE (50–79% AMBIGUOUS CANDIDATES)   -->
+<!-- ========================================================================= -->
+<div id="continuous-review-section" class="card" style="border-top: 3px solid var(--warning); margin-bottom: 1.5rem; background: var(--bg-card); display: {% if manual_review %}block{% else %}none{% endif %};">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span class="badge badge-warning">CONTINUOUS REVIEW QUEUE</span>
+                <span class="card-title" style="font-size: 1rem; margin: 0;">Guided Individual Review (<span id="queue-active-counter">1</span> of <span id="queue-total-counter">{{ manual_review|length }}</span>)</span>
+            </div>
+            <div style="font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.2rem;">
+                Process ambiguous candidates item-by-item continuously without page reloads. Keyboard shortcuts: <kbd>C</kbd> (Confirm), <kbd>U</kbd> (Unmatched), <kbd>S</kbd> / <kbd>N</kbd> (Skip/Next), <kbd>P</kbd> (Prev).
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="navigateManualQueue(-1)">&larr; Prev (P)</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="navigateManualQueue(1)">Skip / Next (N) &rarr;</button>
+        </div>
+    </div>
+
+    <!-- Active Item Review Focus Card -->
+    <div id="queue-active-card-container" style="padding: 1.25rem;">
+        <!-- Dynamically rendered by JS -->
+    </div>
+</div>
+
+<!-- All Manual Resolved Celebration Banner (Hidden unless 0 manual remaining) -->
+<div id="all-manual-resolved-banner" class="card" style="display: {% if not manual_review and summary_counts.manual_review == 0 %}block{% else %}none{% endif %}; border: 2px solid var(--success); background: linear-gradient(135deg, rgba(34, 197, 94, 0.12) 0%, rgba(20, 31, 56, 0.95) 100%); padding: 1.5rem; text-align: center; margin-bottom: 1.5rem;">
+    <div style="font-size: 1.8rem; margin-bottom: 0.25rem;">🎉</div>
+    <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.25rem;">
+        All Manual Review Items Resolved!
+    </h3>
+    <p style="font-size: 0.8125rem; color: var(--text-muted); max-width: 500px; margin: 0 auto;">
+        Every ambiguous supplier quotation line has been resolved. You can now proceed to commercial comparison.
+    </p>
+</div>
+
+<!-- ========================================================================= -->
+<!-- SECTION 4: BLOCKED CONFLICTS (HARD CONFLICT GATES)                         -->
+<!-- ========================================================================= -->
+{% if blocked_conflicts %}
+<div class="card" style="border-top: 3px solid var(--danger); margin-bottom: 1.5rem; background: var(--bg-card);">
+    <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="badge badge-danger">BLOCKED — CONFLICT DETECTED</span>
+            <span class="card-title" style="font-size: 1rem; margin: 0; color: var(--danger);">Hard Conflicts Overriding Score ({{ blocked_conflicts|length }})</span>
+        </div>
+        <div style="font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.2rem;">
+            High similarity scores were blocked from auto-matching because a contradictory critical specification, manufacturer part number, or incompatible UOM was detected.
         </div>
     </div>
 
@@ -117,22 +361,21 @@
         <table>
             <thead>
                 <tr>
-                    <th style="width: 50px;">Line #</th>
-                    <th style="min-width: 220px;">Supplier Quoted Item</th>
-                    <th style="min-width: 240px;">Proposed RFQ / Item Master Match</th>
-                    <th style="width: 140px;">Issue Category</th>
-                    <th style="width: 130px;">Status</th>
-                    <th style="width: 200px; text-align: right;">Resolution Action</th>
+                    <th style="width: 60px;">Line #</th>
+                    <th style="min-width: 200px;">Supplier Quoted Item</th>
+                    <th style="min-width: 220px;">Competing Candidate</th>
+                    <th style="min-width: 240px;">Conflict Diagnostics</th>
+                    <th style="width: 180px; text-align: right;">Manual Override</th>
                 </tr>
             </thead>
             <tbody>
-                {% for item in matched_items %}
-                <tr>
+                {% for item in blocked_conflicts %}
+                <tr id="blocked-row-{{ item.quote_item.line_index }}">
                     <td><code>{{ item.quote_item.line_index + 1 }}</code></td>
                     <td>
-                        <strong style="color: var(--text-main); font-size: 0.875rem;">{{ item.quote_item.raw_description }}</strong>
+                        <strong style="color: var(--text-main);">{{ item.quote_item.raw_description }}</strong>
                         <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">
-                            Quoted: {{ item.quote_item.quoted_qty }} {{ item.quote_item.quoted_uom }} @ {{ quote.currency }} {{ item.quote_item.unit_price }}
+                            Quoted: {{ item.quote_item.quoted_qty or '—' }} {{ item.quote_item.quoted_uom or '' }} @ {{ quote.currency }} {{ item.quote_item.unit_price }}
                             {% if item.quote_item.supplier_part_number %}
                             &bull; PN: <code style="color: var(--accent);">{{ item.quote_item.supplier_part_number }}</code>
                             {% endif %}
@@ -140,76 +383,180 @@
                     </td>
                     <td>
                         {% if item.item_master_match %}
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <code style="color: var(--accent); font-weight: 700; font-size: 0.8125rem;">{{ item.item_master_match.candidate_sku }}</code>
-                                <span style="color: var(--text-muted); font-size: 0.75rem;">({{ "%.0f"|format(item.item_master_match.match_score * 100) }}% match)</span>
-                            </div>
-                            <div style="font-size: 0.8125rem; color: var(--text-main); margin-top: 0.15rem;">
-                                {{ item.item_master_match.candidate_description }}
-                            </div>
-                            {% if item.item_master_match.explanations %}
-                            <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.15rem;">
-                                {{ item.item_master_match.explanations[0] }}
-                            </div>
-                            {% endif %}
+                        <code style="color: var(--accent); font-weight: 700;">{{ item.item_master_match.candidate_sku }}</code>
+                        <div style="font-size: 0.8125rem; color: var(--text-main);">
+                            {{ item.item_master_match.candidate_description }}
+                        </div>
                         {% else %}
-                            <span style="color: var(--text-muted); font-style: italic;">No Item Master match candidate</span>
+                        <span style="color: var(--text-muted); font-style: italic;">No candidate</span>
                         {% endif %}
                     </td>
                     <td>
-                        {% if item.match_status == 'REVIEW_REQUIRED' %}
-                            <span class="badge badge-warning">MATCHING: Ambiguous</span>
-                        {% elif item.match_status == 'UOM_INCOMPATIBLE' %}
-                            <span class="badge badge-danger">DATA: UOM Conflict</span>
-                        {% elif item.match_status == 'UNMATCHED' %}
-                            <span class="badge badge-muted">MATCHING: Unmatched</span>
-                        {% elif not item.quote_item.unit_price or item.quote_item.unit_price == 0 %}
-                            <span class="badge badge-warning">COMMERCIAL: No Price</span>
-                        {% else %}
-                            <span class="badge badge-success">ALIGNED</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if item.match_status == 'EXACT_MATCH' %}
-                            <span class="badge badge-success">Exact Match</span>
-                        {% elif item.match_status == 'HIGH_CONFIDENCE_MATCH' %}
-                            <span class="badge badge-info">High Confidence</span>
-                        {% elif item.match_status == 'REVIEW_REQUIRED' %}
-                            <span class="badge badge-warning">Review Needed</span>
-                        {% elif item.match_status == 'UNMATCHED' %}
-                            <span class="badge badge-muted">Unmatched</span>
-                        {% else %}
-                            <span class="badge badge-muted">{{ item.match_status }}</span>
-                        {% endif %}
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                            {% for c in item.conflict_reasons %}
+                            <span class="badge badge-danger" style="font-size: 0.75rem; text-align: left; white-space: normal; line-height: 1.3;">
+                                ✗ {{ c }}
+                            </span>
+                            {% endfor %}
+                            {% for r in item.review_reasons %}
+                                {% if r not in item.conflict_reasons %}
+                                <span class="badge badge-warning" style="font-size: 0.75rem; text-align: left; white-space: normal; line-height: 1.3;">
+                                    ⚠ {{ r }}
+                                </span>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
                     </td>
                     <td style="text-align: right;">
-                        {% if item.match_status == 'REVIEW_REQUIRED' and item.top_candidates %}
-                        <form action="/quotes/{{ quote_id }}/match/resolve" method="POST" style="display: inline-flex; gap: 0.25rem; justify-content: flex-end;">
-                            <input type="hidden" name="line_index" value="{{ item.quote_item.line_index }}">
-                            <select name="chosen_candidate_sku" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; max-width: 140px;">
-                                {% for cand in item.top_candidates %}
-                                <option value="{{ cand.candidate_sku }}">{{ cand.candidate_sku }} ({{ "%.0f"|format(cand.match_score * 100) }}%)</option>
-                                {% endfor %}
-                            </select>
-                            <button type="submit" name="action_" value="ACCEPT" class="btn btn-primary btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
-                                Confirm
-                            </button>
-                        </form>
-                        {% elif item.match_status == 'UNMATCHED' and item_master %}
-                        <form action="/quotes/{{ quote_id }}/match/resolve" method="POST" style="display: inline-flex; gap: 0.25rem; justify-content: flex-end;">
-                            <input type="hidden" name="line_index" value="{{ item.quote_item.line_index }}">
-                            <select name="chosen_candidate_sku" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; max-width: 140px;">
-                                <option value="">Select SKU...</option>
+                        <div style="display: inline-flex; flex-direction: column; gap: 0.25rem; align-items: flex-end;">
+                            <select id="blocked-select-{{ item.quote_item.line_index }}" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; max-width: 160px;">
+                                <option value="">Select Catalog SKU...</option>
                                 {% for prod in item_master %}
                                 <option value="{{ prod.internal_sku }}">{{ prod.internal_sku }}</option>
                                 {% endfor %}
                             </select>
-                            <button type="submit" name="action_" value="MANUAL_OVERRIDE" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                            <div style="display: flex; gap: 0.25rem;">
+                                <button type="button" class="btn btn-secondary btn-sm" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="overrideBlockedLine({{ item.quote_item.line_index }})">
+                                    Override
+                                </button>
+                                <button type="button" class="btn btn-danger btn-sm" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="unmatchBlockedLine({{ item.quote_item.line_index }})">
+                                    Unmatched
+                                </button>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- ========================================================================= -->
+<!-- SECTION 5: COMPLETE MASTER ITEMS INSPECTION TABLE WITH TABS               -->
+<!-- ========================================================================= -->
+<div class="card" style="border-top: 3px solid var(--accent);">
+    <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+        <div>
+            <div class="card-title" style="font-size: 1rem; margin: 0;">Complete Quotation Line Registry ({{ matched_items|length }} Items)</div>
+            <div style="font-size: 0.8125rem; color: var(--text-muted);">
+                View and interact with every line item in this supplier quote.
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 0.25rem; flex-wrap: wrap;">
+            <button class="btn btn-secondary btn-sm filter-tab active" onclick="filterWorkbenchTable('ALL', this)">All ({{ matched_items|length }})</button>
+            <button class="btn btn-secondary btn-sm filter-tab" onclick="filterWorkbenchTable('HIGH_CONFIDENCE', this)">Auto-Resolved (<span id="tab-count-auto">{{ summary_counts.auto_resolved }}</span>)</button>
+            <button class="btn btn-secondary btn-sm filter-tab" onclick="filterWorkbenchTable('BULK_CANDIDATE', this)">Bulk Candidates (<span id="tab-count-bulk">{{ summary_counts.bulk_candidates }}</span>)</button>
+            <button class="btn btn-secondary btn-sm filter-tab" onclick="filterWorkbenchTable('MANUAL_REVIEW', this)">Manual Review (<span id="tab-count-manual">{{ summary_counts.manual_review }}</span>)</button>
+            <button class="btn btn-secondary btn-sm filter-tab" onclick="filterWorkbenchTable('BLOCKED_CONFLICT', this)">Blocked (<span id="tab-count-blocked">{{ summary_counts.blocked_conflicts }}</span>)</button>
+            <button class="btn btn-secondary btn-sm filter-tab" onclick="filterWorkbenchTable('LOW_CONFIDENCE', this)">Unmatched (<span id="tab-count-unmatched">{{ summary_counts.low_confidence }}</span>)</button>
+        </div>
+    </div>
+
+    <div style="overflow-x: auto;">
+        <table id="master-workbench-table">
+            <thead>
+                <tr>
+                    <th style="width: 50px;">Line #</th>
+                    <th style="min-width: 220px;">Supplier Quoted Item</th>
+                    <th style="min-width: 240px;">Item Master Alignment</th>
+                    <th style="width: 140px;">Band / Status</th>
+                    <th style="min-width: 220px;">Evidence &amp; Diagnostics</th>
+                    <th style="width: 180px; text-align: right;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in matched_items %}
+                <tr class="workbench-row" id="registry-row-{{ item.quote_item.line_index }}" data-band="{{ item.decision_band or 'LOW_CONFIDENCE' }}" data-status="{{ item.match_status }}">
+                    <td><code>{{ item.quote_item.line_index + 1 }}</code></td>
+                    <td>
+                        <strong style="color: var(--text-main); font-size: 0.875rem;">{{ item.quote_item.raw_description }}</strong>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">
+                            Quoted: {{ item.quote_item.quoted_qty or '—' }} {{ item.quote_item.quoted_uom or '' }} @ {{ quote.currency }} {{ item.quote_item.unit_price }}
+                            {% if item.quote_item.supplier_part_number %}
+                            &bull; PN: <code style="color: var(--accent);">{{ item.quote_item.supplier_part_number }}</code>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td id="registry-alignment-{{ item.quote_item.line_index }}">
+                        {% if item.item_master_match %}
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <code style="color: var(--accent); font-weight: 700; font-size: 0.8125rem;">{{ item.item_master_match.candidate_sku }}</code>
+                                <span style="color: var(--text-muted); font-size: 0.75rem;">({{ "%.0f"|format(item.item_master_match.match_score * 100) }}%)</span>
+                            </div>
+                            <div style="font-size: 0.8125rem; color: var(--text-main); margin-top: 0.15rem;">
+                                {{ item.item_master_match.candidate_description }}
+                            </div>
+                        {% else %}
+                            <span style="color: var(--text-muted); font-style: italic;">No Item Master match candidate</span>
+                        {% endif %}
+                    </td>
+                    <td id="registry-badge-{{ item.quote_item.line_index }}">
+                        {% if item.has_hard_conflict or item.decision_band == 'BLOCKED_CONFLICT' %}
+                            <span class="badge badge-danger">BLOCKED CONFLICT</span>
+                        {% elif item.match_status in ['EXACT_MATCH', 'HIGH_CONFIDENCE_MATCH'] %}
+                            <span class="badge badge-success">✓ HIGH CONFIDENCE</span>
+                        {% elif item.decision_band == 'BULK_CANDIDATE' %}
+                            <span class="badge" style="background: rgba(59, 130, 246, 0.15); color: #3b82f6;">BULK CANDIDATE</span>
+                        {% elif item.decision_band == 'MANUAL_REVIEW' %}
+                            <span class="badge badge-warning">MANUAL REVIEW</span>
+                        {% elif item.match_status == 'UNMATCHED' %}
+                            <span class="badge badge-muted">UNMATCHED</span>
+                        {% else %}
+                            <span class="badge badge-muted">{{ item.match_status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.75rem;">
+                            {% for ev in item.evidence_checklist %}
+                            <div style="display: flex; align-items: center; gap: 0.35rem;">
+                                {% if ev.status == 'PASS' %}
+                                    <span style="color: var(--success); font-weight: 800;">✓</span>
+                                {% elif ev.status == 'WARNING' %}
+                                    <span style="color: var(--warning); font-weight: 800;">⚠</span>
+                                {% elif ev.status == 'FAIL' %}
+                                    <span style="color: var(--danger); font-weight: 800;">✗</span>
+                                {% else %}
+                                    <span style="color: var(--text-muted);">ℹ</span>
+                                {% endif %}
+                                <span>{{ ev.description }}</span>
+                            </div>
+                            {% endfor %}
+                            {% for cr in item.conflict_reasons %}
+                            <div style="color: var(--danger); font-weight: 700;">✗ {{ cr }}</div>
+                            {% endfor %}
+                        </div>
+                    </td>
+                    <td style="text-align: right;" id="registry-action-{{ item.quote_item.line_index }}">
+                        {% if item.top_candidates and item.match_status != 'EXACT_MATCH' %}
+                        <div style="display: inline-flex; gap: 0.25rem; justify-content: flex-end;">
+                            <select id="registry-select-{{ item.quote_item.line_index }}" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; max-width: 140px;">
+                                {% for cand in item.top_candidates %}
+                                <option value="{{ cand.candidate_sku }}">{{ cand.candidate_sku }} ({{ "%.0f"|format(cand.match_score * 100) }}%)</option>
+                                {% endfor %}
+                            </select>
+                            <button type="button" class="btn btn-primary btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="confirmRegistryLine({{ item.quote_item.line_index }})">
+                                Confirm
+                            </button>
+                        </div>
+                        {% elif item.match_status == 'UNMATCHED' and item_master %}
+                        <div style="display: inline-flex; gap: 0.25rem; justify-content: flex-end;">
+                            <select id="registry-map-{{ item.quote_item.line_index }}" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; max-width: 140px;">
+                                <option value="">Map SKU...</option>
+                                {% for prod in item_master %}
+                                <option value="{{ prod.internal_sku }}">{{ prod.internal_sku }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="button" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="mapRegistryLine({{ item.quote_item.line_index }})">
                                 Map
                             </button>
-                        </form>
+                        </div>
                         {% else %}
-                            <span style="font-size: 0.75rem; color: var(--success); font-weight: 600;">✓ Ready</span>
+                            <button type="button" class="btn btn-secondary btn-sm" style="padding: 0.2rem 0.4rem; font-size: 0.7rem;" onclick="resetRegistryLine({{ item.quote_item.line_index }})">
+                                Reopen
+                            </button>
                         {% endif %}
                     </td>
                 </tr>
@@ -218,10 +565,10 @@
         </table>
     </div>
 
-    <!-- Bottom Navigation Footer -->
+    <!-- Bottom Action Bar -->
     <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 1rem; margin-top: 1rem; border-top: 1px solid var(--border-color); flex-wrap: wrap; gap: 0.75rem;">
         <div style="font-size: 0.8125rem; color: var(--text-muted);">
-            All items resolved can participate in commercial comparison.
+            All confirmed items participate in line-level normalized commercial comparison.
         </div>
         <div style="display: flex; gap: 0.5rem;">
             {% if rfq %}
@@ -235,47 +582,596 @@
     </div>
 </div>
 
-<script>
-    // Smooth AJAX resolution for per-quote review table
-    document.querySelectorAll('form[action*="/match/resolve"]').forEach(form => {
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const btn = form.querySelector('button[type="submit"]');
-            if (btn) btn.disabled = true;
+<!-- ========================================================================= -->
+<!-- 2-STEP BULK CONFIRMATION MODAL                                            -->
+<!-- ========================================================================= -->
+<div id="bulkConfirmModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
+    <div style="background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 520px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3); overflow: hidden;">
+        <div style="padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0; font-size: 1.15rem; font-weight: 800; color: var(--text-main);">
+                Confirm Proposed Matches
+            </h3>
+            <button type="button" onclick="closeBulkConfirmModal()" style="background: none; border: none; font-size: 1.25rem; color: var(--text-muted); cursor: pointer;">&times;</button>
+        </div>
+        <div style="padding: 1.5rem; line-height: 1.5; color: var(--text-main); font-size: 0.9rem;">
+            <p style="margin-top: 0;">
+                You are about to confirm <strong id="modal-bulk-count" style="color: var(--accent);">0</strong> supplier lines against their proposed Item Master catalog and RFQ items.
+            </p>
+            <div style="background: var(--bg-body); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.75rem 1rem; margin: 1rem 0; font-size: 0.8125rem;">
+                <div style="font-weight: 700; color: var(--text-main); margin-bottom: 0.25rem;">Audit &amp; Intelligence Invariant:</div>
+                <div style="color: var(--text-muted);">
+                    Confirmed supplier-part relationships will be saved to your persistent procurement memory for automatic recall on future quotations.
+                </div>
+            </div>
+            <p style="margin-bottom: 0; font-size: 0.8125rem; color: var(--text-muted);">
+                Apply these confirmations now?
+            </p>
+        </div>
+        <div style="padding: 1rem 1.5rem; background: var(--bg-body); border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 0.75rem;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="closeBulkConfirmModal()">Back</button>
+            <button type="button" class="btn btn-primary btn-sm" id="modal-confirm-btn" onclick="executeBulkConfirmation()">
+                Confirm Matches
+            </button>
+        </div>
+    </div>
+</div>
 
-            const formData = new FormData(form);
-            if (e.submitter && e.submitter.value) {
-                formData.set('action_', e.submitter.value);
+<script>
+    const QUOTE_ID = "{{ quote_id }}";
+
+    // Data for continuous queue
+    const manualQueueItems = [
+        {% for item in manual_review %}
+        {
+            line_index: {{ item.quote_item.line_index }},
+            line_number: {{ item.quote_item.line_index + 1 }},
+            raw_description: {{ item.quote_item.raw_description|tojson }},
+            quoted_qty: "{{ item.quote_item.quoted_qty or '—' }}",
+            quoted_uom: "{{ item.quote_item.quoted_uom or '' }}",
+            unit_price: "{{ item.quote_item.unit_price }}",
+            supplier_part_number: "{{ item.quote_item.supplier_part_number or '' }}",
+            currency: "{{ quote.currency }}",
+            best_candidate: {% if item.item_master_match %}{{ item.item_master_match.model_dump()|tojson }}{% elif item.top_candidates %}{{ item.top_candidates[0].model_dump()|tojson }}{% else %}null{% endif %},
+            top_candidates: [
+                {% for cand in item.top_candidates %}
+                {{ cand.model_dump()|tojson }}{% if not loop.last %},{% endif %}
+                {% endfor %}
+            ],
+            evidence: [
+                {% for ev in item.evidence_checklist %}
+                { status: "{{ ev.status }}", signal: "{{ ev.signal }}", description: {{ ev.description|tojson }} }{% if not loop.last %},{% endif %}
+                {% endfor %}
+            ]
+        }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
+
+    let currentQueueIndex = 0;
+
+    function renderActiveQueueCard() {
+        const container = document.getElementById('queue-active-card-container');
+        const counterSpan = document.getElementById('queue-active-counter');
+        const totalSpan = document.getElementById('queue-total-counter');
+
+        if (!container) return;
+
+        if (manualQueueItems.length === 0) {
+            document.getElementById('continuous-review-section').style.display = 'none';
+            document.getElementById('all-manual-resolved-banner').style.display = 'block';
+            return;
+        }
+
+        if (currentQueueIndex >= manualQueueItems.length) {
+            currentQueueIndex = 0;
+        }
+        if (currentQueueIndex < 0) {
+            currentQueueIndex = manualQueueItems.length - 1;
+        }
+
+        const item = manualQueueItems[currentQueueIndex];
+        if (counterSpan) counterSpan.innerText = (currentQueueIndex + 1);
+        if (totalSpan) totalSpan.innerText = manualQueueItems.length;
+
+        const bestCand = item.best_candidate;
+        const scorePct = bestCand ? Math.round(bestCand.match_score * 100) : 0;
+
+        let evHtml = '';
+        if (item.evidence && item.evidence.length > 0) {
+            evHtml = item.evidence.map(ev => {
+                let icon = 'ℹ', color = 'var(--text-muted)';
+                if (ev.status === 'PASS') { icon = '✓'; color = 'var(--success)'; }
+                else if (ev.status === 'WARNING') { icon = '⚠'; color = 'var(--warning)'; }
+                else if (ev.status === 'FAIL') { icon = '✗'; color = 'var(--danger)'; }
+                return `<div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem;">
+                    <span style="color: ${color}; font-weight: 800;">${icon}</span>
+                    <span style="color: var(--text-main);">${ev.description}</span>
+                </div>`;
+            }).join('');
+        }
+
+        let optionsHtml = '';
+        if (item.top_candidates && item.top_candidates.length > 0) {
+            optionsHtml = item.top_candidates.map(c => 
+                `<option value="${c.candidate_sku}">${c.candidate_sku} — ${c.candidate_description} (${Math.round(c.match_score * 100)}%)</option>`
+            ).join('');
+        }
+
+        container.innerHTML = `
+            <div style="background: var(--bg-body); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.25rem; align-items: start;">
+                <!-- Left: Quoted Line Item -->
+                <div style="border-right: 1px solid var(--border-color); padding-right: 1.25rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <span class="badge badge-muted">Line #${item.line_number}</span>
+                        ${item.supplier_part_number ? `<code style="color: var(--accent); font-weight: 700;">PN: ${item.supplier_part_number}</code>` : ''}
+                    </div>
+                    <div style="font-size: 1rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.5rem;">
+                        ${item.raw_description}
+                    </div>
+                    <div style="font-size: 0.8125rem; color: var(--text-muted);">
+                        Quoted Quantity: <strong style="color: var(--text-main);">${item.quoted_qty} ${item.quoted_uom}</strong> &bull; Unit Rate: <strong style="color: var(--text-main);">${item.currency} ${item.unit_price}</strong>
+                    </div>
+                </div>
+
+                <!-- Right: Proposed Match & Evidence -->
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <span style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: var(--text-muted);">Proposed Candidate Match</span>
+                        ${bestCand ? `<span class="badge badge-warning" style="font-size: 0.75rem; font-weight: 800;">${scorePct}% Confidence</span>` : '<span class="badge badge-muted">No Candidate</span>'}
+                    </div>
+                    ${bestCand ? `
+                    <div style="font-size: 0.95rem; font-weight: 800; color: var(--accent); margin-bottom: 0.25rem;">
+                        ${bestCand.candidate_sku}
+                    </div>
+                    <div style="font-size: 0.8125rem; color: var(--text-main); margin-bottom: 0.75rem;">
+                        ${bestCand.candidate_description}
+                    </div>
+                    ` : '<div style="font-style: italic; color: var(--text-muted); margin-bottom: 0.75rem;">No confident catalog candidate identified.</div>'}
+
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 1rem; background: var(--bg-card); padding: 0.5rem 0.75rem; border-radius: 6px; border: 1px solid var(--border-color);">
+                        ${evHtml || '<span style="font-size: 0.75rem; color: var(--text-muted);">No signals recorded.</span>'}
+                    </div>
+
+                    <!-- Alternate Candidates Dropdown -->
+                    ${optionsHtml ? `
+                    <div style="margin-bottom: 1rem;">
+                        <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 0.25rem;">Alternative Candidates:</label>
+                        <select id="queue-alt-sku-select" style="width: 100%; padding: 0.35rem 0.5rem; font-size: 0.8125rem; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px;">
+                            ${optionsHtml}
+                        </select>
+                    </div>
+                    ` : ''}
+
+                    <!-- Continuous Actions -->
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        ${bestCand ? `
+                        <button type="button" class="btn btn-success btn-sm" style="font-weight: 700;" onclick="resolveQueueItem('ACCEPT', '${bestCand.candidate_sku}')">
+                            ✓ Confirm Top Match (C)
+                        </button>
+                        ` : ''}
+                        ${optionsHtml ? `
+                        <button type="button" class="btn btn-primary btn-sm" onclick="resolveQueueItemFromSelect()">
+                            Select &amp; Confirm
+                        </button>
+                        ` : ''}
+                        <button type="button" class="btn btn-danger btn-sm" onclick="resolveQueueItem('MARK_UNMATCHED', null)">
+                            Mark Unmatched (U)
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="navigateManualQueue(1)">
+                            Skip (S) &rarr;
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function navigateManualQueue(delta) {
+        if (manualQueueItems.length === 0) return;
+        currentQueueIndex = (currentQueueIndex + delta + manualQueueItems.length) % manualQueueItems.length;
+        renderActiveQueueCard();
+    }
+
+    async function resolveQueueItem(action, chosenSku) {
+        if (manualQueueItems.length === 0) return;
+        const item = manualQueueItems[currentQueueIndex];
+
+        const formData = new FormData();
+        formData.append('line_index', item.line_index);
+        if (chosenSku) formData.append('chosen_candidate_sku', chosenSku);
+        formData.append('action_', action);
+
+        try {
+            const res = await fetch(`/quotes/${QUOTE_ID}/match/resolve`, {
+                method: 'POST',
+                body: formData,
+                headers: { 'Accept': 'application/json' }
+            });
+
+            if (!res.ok) throw new Error('Failed to resolve match');
+            const data = await res.json();
+
+            // Update stats
+            if (data.summary_counts) updateStatCards(data.summary_counts);
+
+            // Update row in complete registry table in-place
+            updateRegistryRowInPlace(item.line_index, action, chosenSku);
+
+            // Remove from queue
+            manualQueueItems.splice(currentQueueIndex, 1);
+            if (currentQueueIndex >= manualQueueItems.length) {
+                currentQueueIndex = 0;
             }
 
-            try {
-                const res = await fetch(form.action, {
-                    method: 'POST',
-                    body: formData,
-                    headers: { 'Accept': 'application/json' }
-                });
-                if (!res.ok) throw new Error('Resolution failed');
-                
-                const td = form.closest('td');
-                if (td) {
-                    td.innerHTML = '<span style="font-size: 0.75rem; color: var(--success); font-weight: 700;">✓ Aligned & Saved</span>';
+            renderActiveQueueCard();
+        } catch (err) {
+            alert('Error: ' + err.message);
+        }
+    }
+
+    function resolveQueueItemFromSelect() {
+        const select = document.getElementById('queue-alt-sku-select');
+        if (!select || !select.value) return;
+        resolveQueueItem('ACCEPT', select.value);
+    }
+
+    function updateStatCards(counts) {
+        if (counts.total !== undefined && document.getElementById('stat-total')) document.getElementById('stat-total').innerText = counts.total;
+        if (counts.auto_resolved !== undefined && document.getElementById('stat-auto-resolved')) document.getElementById('stat-auto-resolved').innerText = counts.auto_resolved;
+        if (counts.bulk_candidates !== undefined && document.getElementById('stat-bulk-candidates')) document.getElementById('stat-bulk-candidates').innerText = counts.bulk_candidates;
+        if (counts.manual_review !== undefined && document.getElementById('stat-manual-review')) document.getElementById('stat-manual-review').innerText = counts.manual_review;
+        if (counts.blocked_conflicts !== undefined && document.getElementById('stat-blocked-conflicts')) document.getElementById('stat-blocked-conflicts').innerText = counts.blocked_conflicts;
+        if (counts.low_confidence !== undefined && document.getElementById('stat-low-confidence')) document.getElementById('stat-low-confidence').innerText = counts.low_confidence;
+
+        if (document.getElementById('tab-count-auto')) document.getElementById('tab-count-auto').innerText = counts.auto_resolved || 0;
+        if (document.getElementById('tab-count-bulk')) document.getElementById('tab-count-bulk').innerText = counts.bulk_candidates || 0;
+        if (document.getElementById('tab-count-manual')) document.getElementById('tab-count-manual').innerText = counts.manual_review || 0;
+        if (document.getElementById('tab-count-blocked')) document.getElementById('tab-count-blocked').innerText = counts.blocked_conflicts || 0;
+        if (document.getElementById('tab-count-unmatched')) document.getElementById('tab-count-unmatched').innerText = counts.low_confidence || 0;
+    }
+
+    function updateRegistryRowInPlace(lineIndex, action, sku) {
+        const row = document.getElementById(`registry-row-${lineIndex}`);
+        const badgeCell = document.getElementById(`registry-badge-${lineIndex}`);
+        const actionCell = document.getElementById(`registry-action-${lineIndex}`);
+
+        if (badgeCell) {
+            if (action === 'MARK_UNMATCHED') {
+                badgeCell.innerHTML = `<span class="badge badge-muted">UNMATCHED</span>`;
+            } else {
+                badgeCell.innerHTML = `<span class="badge badge-success">✓ CONFIRMED</span>`;
+            }
+        }
+
+        if (actionCell) {
+            actionCell.innerHTML = `
+                <button type="button" class="btn btn-secondary btn-sm" style="padding: 0.2rem 0.4rem; font-size: 0.7rem;" onclick="resetRegistryLine(${lineIndex})">
+                    Reopen
+                </button>
+            `;
+        }
+
+        if (row) {
+            row.setAttribute('data-band', action === 'MARK_UNMATCHED' ? 'LOW_CONFIDENCE' : 'HIGH_CONFIDENCE');
+            row.setAttribute('data-status', action === 'MARK_UNMATCHED' ? 'UNMATCHED' : 'EXACT_MATCH');
+        }
+    }
+
+    // Keyboard Shortcuts
+    document.addEventListener('keydown', (e) => {
+        // Ignore if active element is an input/select
+        if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+
+        if (e.key === 'c' || e.key === 'C') {
+            const item = manualQueueItems[currentQueueIndex];
+            if (item && item.best_candidate) {
+                resolveQueueItem('ACCEPT', item.best_candidate.candidate_sku);
+            }
+        } else if (e.key === 'u' || e.key === 'U') {
+            resolveQueueItem('MARK_UNMATCHED', null);
+        } else if (e.key === 's' || e.key === 'S' || e.key === 'n' || e.key === 'N') {
+            navigateManualQueue(1);
+        } else if (e.key === 'p' || e.key === 'P') {
+            navigateManualQueue(-1);
+        }
+    });
+
+    // 2-Step Bulk Confirmation & Auto-Batched Workflow
+    let pendingBulkIndices = [];
+
+    function toggleBatchDetails(batchId) {
+        const container = document.getElementById(`batch-table-container-${batchId}`);
+        const btn = document.getElementById(`btn-toggle-batch-${batchId}`);
+        if (!container) return;
+
+        if (container.style.display === 'none' || container.style.display === '') {
+            container.style.display = 'block';
+            if (btn) btn.innerHTML = '&#x25b4; Hide details';
+        } else {
+            container.style.display = 'none';
+            const countSpan = document.getElementById(`batch-selected-counter-${batchId}`);
+            const count = countSpan ? countSpan.innerText : '';
+            if (btn) btn.innerHTML = `&#x25be; Review ${count} proposed matches`;
+        }
+    }
+
+    function updateBatchSelectedCount(batchId) {
+        const checks = document.querySelectorAll(`.batch-item-check-${batchId}:checked`);
+        const countSpan = document.getElementById(`batch-selected-counter-${batchId}`);
+        if (countSpan) countSpan.innerText = checks.length;
+
+        const btn = document.getElementById(`btn-confirm-batch-${batchId}`);
+        if (btn) btn.disabled = (checks.length === 0);
+
+        updateGlobalBulkCount();
+    }
+
+    function toggleBatchCheckboxes(batchId, checked) {
+        document.querySelectorAll(`.batch-item-check-${batchId}`).forEach(cb => cb.checked = checked);
+        updateBatchSelectedCount(batchId);
+    }
+
+    function updateGlobalBulkCount() {
+        const allChecks = document.querySelectorAll('.bulk-global-check:checked');
+        const allCountSpan = document.getElementById('bulk-all-selected-count');
+        if (allCountSpan) allCountSpan.innerText = allChecks.length;
+        const allBtn = document.getElementById('btn-confirm-all-bulk');
+        if (allBtn) allBtn.disabled = (allChecks.length === 0);
+    }
+
+    function openBatchConfirmModal(batchId, proposedSku, count) {
+        const checks = document.querySelectorAll(`.batch-item-check-${batchId}:checked`);
+        if (checks.length === 0) {
+            alert('Please select at least one candidate line in this batch to confirm.');
+            return;
+        }
+        pendingBulkIndices = Array.from(checks).map(cb => parseInt(cb.value));
+        document.getElementById('modal-bulk-count').innerText = pendingBulkIndices.length;
+        document.getElementById('modal-confirm-btn').innerText = `Confirm ${pendingBulkIndices.length} Matches (${proposedSku})`;
+        const modal = document.getElementById('bulkConfirmModal');
+        modal.style.display = 'flex';
+    }
+
+    function openConfirmAllBulkModal() {
+        const checks = document.querySelectorAll('.bulk-global-check:checked');
+        if (checks.length === 0) {
+            alert('No eligible candidate lines selected.');
+            return;
+        }
+        pendingBulkIndices = Array.from(checks).map(cb => parseInt(cb.value));
+        document.getElementById('modal-bulk-count').innerText = pendingBulkIndices.length;
+        document.getElementById('modal-confirm-btn').innerText = `Confirm All ${pendingBulkIndices.length} Matches`;
+        const modal = document.getElementById('bulkConfirmModal');
+        modal.style.display = 'flex';
+    }
+
+    function closeBulkConfirmModal() {
+        const modal = document.getElementById('bulkConfirmModal');
+        modal.style.display = 'none';
+        pendingBulkIndices = [];
+    }
+
+    async function executeBulkConfirmation() {
+        if (pendingBulkIndices.length === 0) return;
+        const indices = pendingBulkIndices;
+        const btn = document.getElementById('modal-confirm-btn');
+        btn.disabled = true;
+        btn.innerText = 'Applying confirmations...';
+
+        try {
+            const formData = new FormData();
+            formData.append('line_indices', JSON.stringify(indices));
+
+            const res = await fetch(`/quotes/${QUOTE_ID}/match/bulk-confirm`, {
+                method: 'POST',
+                body: formData,
+                headers: { 'Accept': 'application/json' }
+            });
+
+            if (!res.ok) throw new Error('Bulk confirmation failed');
+            const data = await res.json();
+            closeBulkConfirmModal();
+
+            // Update confirmed rows in registry table
+            indices.forEach(idx => {
+                const r = document.getElementById(`batch-row-${idx}`);
+                if (r) r.remove();
+                updateRegistryRowInPlace(idx, 'ACCEPT', null);
+            });
+
+            if (data.summary_counts) updateStatCards(data.summary_counts);
+
+            // Clean up any batch cards whose items are all confirmed
+            document.querySelectorAll('.bulk-batch-card').forEach(card => {
+                const remaining = card.querySelectorAll('tbody tr');
+                if (remaining.length === 0) {
+                    card.remove();
+                } else {
+                    const batchId = card.id.replace('batch-card-', '');
+                    updateBatchSelectedCount(batchId);
                 }
-                const tr = form.closest('tr');
-                if (tr) {
-                    const statusTd = tr.children[4];
-                    if (statusTd) {
-                        statusTd.innerHTML = '<span class="badge badge-success">Exact Match</span>';
-                    }
-                    const catTd = tr.children[3];
-                    if (catTd) {
-                        catTd.innerHTML = '<span class="badge badge-success">ALIGNED</span>';
-                    }
-                }
-            } catch (err) {
-                alert('Error saving match: ' + err.message);
-                if (btn) btn.disabled = false;
+            });
+
+            const remainingCards = document.querySelectorAll('.bulk-batch-card');
+            if (remainingCards.length === 0) {
+                document.getElementById('bulk-confirmation-section').style.display = 'none';
+            } else {
+                const totalBulk = document.querySelectorAll('.bulk-global-check').length;
+                document.getElementById('bulk-total-header-count').innerText = totalBulk;
+                document.getElementById('bulk-batch-count').innerText = remainingCards.length;
+                updateGlobalBulkCount();
+            }
+        } catch (err) {
+            alert('Error during bulk confirmation: ' + err.message);
+            btn.disabled = false;
+            btn.innerText = 'Confirm Matches';
+        }
+    }
+
+    // Group Confirmation (Zero Page Reload)
+    async function confirmGroupAction(groupKey, chosenSku, cardId) {
+        const formData = new FormData();
+        formData.append('group_key', groupKey);
+        formData.append('chosen_candidate_sku', chosenSku);
+
+        try {
+            const res = await fetch(`/quotes/${QUOTE_ID}/match/confirm-group`, {
+                method: 'POST',
+                body: formData,
+                headers: { 'Accept': 'application/json' }
+            });
+            if (!res.ok) throw new Error('Failed to confirm group');
+            const data = await res.json();
+
+            const card = document.getElementById(cardId);
+            if (card) card.remove();
+
+            if (data.summary_counts) updateStatCards(data.summary_counts);
+
+            const remainingCards = document.querySelectorAll('.group-card');
+            if (remainingCards.length === 0) {
+                document.getElementById('grouped-decisions-section').style.display = 'none';
+            }
+        } catch (err) {
+            alert('Error: ' + err.message);
+        }
+    }
+
+    // Blocked Conflicts Overrides
+    async function overrideBlockedLine(lineIndex) {
+        const select = document.getElementById(`blocked-select-${lineIndex}`);
+        if (!select || !select.value) {
+            alert('Please select a catalog SKU to override the blocked conflict.');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('line_index', lineIndex);
+        formData.append('chosen_candidate_sku', select.value);
+        formData.append('action_', 'MANUAL_OVERRIDE');
+
+        try {
+            const res = await fetch(`/quotes/${QUOTE_ID}/match/resolve`, {
+                method: 'POST',
+                body: formData,
+                headers: { 'Accept': 'application/json' }
+            });
+            if (!res.ok) throw new Error('Failed to override conflict');
+            const data = await res.json();
+
+            const r = document.getElementById(`blocked-row-${lineIndex}`);
+            if (r) r.remove();
+            updateRegistryRowInPlace(lineIndex, 'ACCEPT', select.value);
+            if (data.summary_counts) updateStatCards(data.summary_counts);
+        } catch (err) {
+            alert('Error: ' + err.message);
+        }
+    }
+
+    async function unmatchBlockedLine(lineIndex) {
+        const formData = new FormData();
+        formData.append('line_index', lineIndex);
+        formData.append('action_', 'MARK_UNMATCHED');
+
+        try {
+            const res = await fetch(`/quotes/${QUOTE_ID}/match/resolve`, {
+                method: 'POST',
+                body: formData,
+                headers: { 'Accept': 'application/json' }
+            });
+            if (!res.ok) throw new Error('Failed to unmatch line');
+            const data = await res.json();
+
+            const r = document.getElementById(`blocked-row-${lineIndex}`);
+            if (r) r.remove();
+            updateRegistryRowInPlace(lineIndex, 'MARK_UNMATCHED', null);
+            if (data.summary_counts) updateStatCards(data.summary_counts);
+        } catch (err) {
+            alert('Error: ' + err.message);
+        }
+    }
+
+    // Registry Table Actions
+    async function confirmRegistryLine(lineIndex) {
+        const select = document.getElementById(`registry-select-${lineIndex}`);
+        const sku = select ? select.value : '';
+        const formData = new FormData();
+        formData.append('line_index', lineIndex);
+        if (sku) formData.append('chosen_candidate_sku', sku);
+        formData.append('action_', 'ACCEPT');
+
+        const res = await fetch(`/quotes/${QUOTE_ID}/match/resolve`, {
+            method: 'POST',
+            body: formData,
+            headers: { 'Accept': 'application/json' }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            updateRegistryRowInPlace(lineIndex, 'ACCEPT', sku);
+            if (data.summary_counts) updateStatCards(data.summary_counts);
+        }
+    }
+
+    async function mapRegistryLine(lineIndex) {
+        const select = document.getElementById(`registry-map-${lineIndex}`);
+        if (!select || !select.value) {
+            alert('Please select a catalog SKU to map.');
+            return;
+        }
+        const formData = new FormData();
+        formData.append('line_index', lineIndex);
+        formData.append('chosen_candidate_sku', select.value);
+        formData.append('action_', 'MANUAL_OVERRIDE');
+
+        const res = await fetch(`/quotes/${QUOTE_ID}/match/resolve`, {
+            method: 'POST',
+            body: formData,
+            headers: { 'Accept': 'application/json' }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            updateRegistryRowInPlace(lineIndex, 'ACCEPT', select.value);
+            if (data.summary_counts) updateStatCards(data.summary_counts);
+        }
+    }
+
+    async function resetRegistryLine(lineIndex) {
+        const formData = new FormData();
+        formData.append('line_index', lineIndex);
+        formData.append('action_', 'RESET');
+
+        const res = await fetch(`/quotes/${QUOTE_ID}/match/resolve`, {
+            method: 'POST',
+            body: formData,
+            headers: { 'Accept': 'application/json' }
+        });
+        if (res.ok) {
+            window.location.reload();
+        }
+    }
+
+    function filterWorkbenchTable(band, tabBtn) {
+        document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+        if (tabBtn) tabBtn.classList.add('active');
+
+        const rows = document.querySelectorAll('.workbench-row');
+        rows.forEach(row => {
+            const rowBand = row.getAttribute('data-band');
+            const rowStatus = row.getAttribute('data-status');
+            if (band === 'ALL') {
+                row.style.display = '';
+            } else if (band === 'HIGH_CONFIDENCE' && (rowBand === 'HIGH_CONFIDENCE' || rowStatus === 'EXACT_MATCH' || rowStatus === 'HIGH_CONFIDENCE_MATCH')) {
+                row.style.display = '';
+            } else if (band === rowBand) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
             }
         });
+    }
+
+    // Initialize continuous queue
+    document.addEventListener('DOMContentLoaded', () => {
+        renderActiveQueueCard();
     });
 </script>
 {% endblock %}

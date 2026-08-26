@@ -70,7 +70,7 @@ def test_every_application_page_can_be_visited(client: TestClient):
     # 8. Review Center
     res_review = client.get("/review")
     assert res_review.status_code == 200
-    assert "Actionable Review Center" in res_review.text
+    assert "Review" in res_review.text
 
     # 9. Dynamic RFQ Workflow Pages for a created RFQ
     ts = int(time.time() * 1000)

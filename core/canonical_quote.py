@@ -164,16 +164,15 @@ class QuoteItem(BaseModel):
     raw_description: str
     supplier_part_number: Optional[str] = None
     hsn_sac_code: Optional[str] = None
-    quoted_qty: Decimal = Field(gt=Decimal("0.0"))
-    quoted_uom: str
-    unit_price: Decimal = Field(ge=Decimal("0.0"))
+    quoted_qty: Optional[Decimal] = Field(default=None, gt=Decimal("0.0"))
+    quoted_uom: Optional[str] = None
+    unit_price: Optional[Decimal] = Field(default=None, ge=Decimal("0.0"))
     discount_pct: Decimal = Field(default=Decimal("0.0"), ge=Decimal("0.0"), le=Decimal("100.0"))
     net_unit_price: Optional[Decimal] = None
     tax_rate_pct: Decimal = Field(default=Decimal("0.0"), ge=Decimal("0.0"))
     tax_components: List[TaxComponent] = Field(default_factory=list)
     lead_time_days: Optional[int] = Field(default=None, ge=0)
     moq: Optional[Decimal] = Field(default=None, ge=Decimal("0.0"))
-
 
     price_tiers: List[PriceTier] = Field(default_factory=list)
 
@@ -182,10 +181,12 @@ class QuoteItem(BaseModel):
     matched_erp_item_code: Optional[str] = None
     uom_conversion_factor: Decimal = Field(default=Decimal("1.0"), gt=Decimal("0.0"))
     confidence_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    category: Optional[str] = None
+    manufacturer: Optional[str] = None
+    manufacturer_part_number: Optional[str] = None
+    specifications: Dict[str, Any] = Field(default_factory=dict)
 
     provenance: Optional[Provenance] = None
-
-    # Field-level evidence for every QuoteItem field
     description_evidence: Optional[FieldEvidence] = None
     supplier_part_number_evidence: Optional[FieldEvidence] = None
     quoted_qty_evidence: Optional[FieldEvidence] = None
@@ -202,7 +203,7 @@ class QuoteItem(BaseModel):
     @model_validator(mode="after")
     def compute_net_price(self):
         """Auto-computes net unit price if omitted."""
-        if self.net_unit_price is None:
+        if self.net_unit_price is None and self.unit_price is not None:
             multiplier = Decimal("1.0") - (self.discount_pct / Decimal("100.0"))
             self.net_unit_price = (self.unit_price * multiplier).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
         return self
@@ -225,8 +226,8 @@ class QuoteItem(BaseModel):
     def resolve_effective_price(self, target_qty: Optional[Decimal] = None) -> Decimal:
         """Resolves unit price against volume tiers for a target quantity."""
         qty = target_qty if target_qty is not None else self.quoted_qty
-        if not self.price_tiers:
-            return self.net_unit_price or self.unit_price
+        if not self.price_tiers or qty is None:
+            return self.net_unit_price or self.unit_price or Decimal("0.0")
 
         for tier in sorted(self.price_tiers, key=lambda t: t.min_qty, reverse=True):
             if qty >= tier.min_qty:
@@ -234,14 +235,18 @@ class QuoteItem(BaseModel):
                     multiplier = Decimal("1.0") - (self.discount_pct / Decimal("100.0"))
                     return (tier.unit_price * multiplier).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
-        return self.net_unit_price or self.unit_price
+        return self.net_unit_price or self.unit_price or Decimal("0.0")
 
     @property
     def gross_amount(self) -> Decimal:
+        if self.quoted_qty is None or self.unit_price is None:
+            return Decimal("0.00")
         return quantize_currency(self.quoted_qty * self.unit_price)
 
     @property
     def discount_amount(self) -> Decimal:
+        if self.quoted_qty is None or self.unit_price is None:
+            return Decimal("0.00")
         gross = self.quoted_qty * self.unit_price
         return quantize_currency(gross * (self.discount_pct / Decimal("100.0")))
 
@@ -251,16 +256,19 @@ class QuoteItem(BaseModel):
 
     @property
     def tax_amount(self) -> Decimal:
+        if self.tax_rate_pct is None:
+            return Decimal("0.00")
         return quantize_currency(self.taxable_amount * (self.tax_rate_pct / Decimal("100.0")))
 
     def calculate_line_landed_cost(self, target_qty: Optional[Decimal] = None) -> Decimal:
         """Calculates line landed cost = taxable + tax."""
+        tax_rate = self.tax_rate_pct if self.tax_rate_pct is not None else Decimal("0.0")
         if target_qty is not None:
             effective_price = self.resolve_effective_price(target_qty)
             gross = quantize_currency(target_qty * effective_price)
             disc = quantize_currency(gross * (self.discount_pct / Decimal("100.0")))
             taxable = gross - disc
-            tax = quantize_currency(taxable * (self.tax_rate_pct / Decimal("100.0")))
+            tax = quantize_currency(taxable * (tax_rate / Decimal("100.0")))
             return quantize_currency(taxable + tax)
 
         return quantize_currency(self.taxable_amount + self.tax_amount)
@@ -285,7 +293,7 @@ class CanonicalQuote(BaseModel):
     quote_number: Optional[str] = None
     quote_date: Optional[date] = None
     valid_until: Optional[date] = None
-    currency: str = Field(default="INR")
+    currency: Optional[str] = Field(default=None)
     exchange_rate_to_base: Decimal = Field(default=Decimal("1.0"), gt=Decimal("0.0"))
 
     payment_terms: Optional[PaymentTerms] = None
