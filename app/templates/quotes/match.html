@@ -47,9 +47,9 @@
         </div>
 
         <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <form action="/quotes/{{ quote_id }}/match/run" method="POST" style="margin: 0;">
+            <form action="/quotes/{{ quote_id }}/match/run" method="POST" style="margin: 0;" onsubmit="return handleReevaluateSubmit(this);">
                 <input type="hidden" name="rfq_id" value="{{ rfq_id or '' }}">
-                <button type="submit" class="btn btn-secondary btn-sm" title="Re-run automatic multi-signal scoring while preserving locked human decisions">
+                <button type="submit" id="btn-reevaluate-matches" class="btn btn-secondary btn-sm" title="Re-run automatic multi-signal scoring while preserving locked human decisions">
                     &#x21bb; Re-evaluate Matches
                 </button>
             </form>
@@ -1167,6 +1167,19 @@
                 row.style.display = 'none';
             }
         });
+    }
+
+    function handleReevaluateSubmit(form) {
+        const btn = document.getElementById('btn-reevaluate-matches') || form.querySelector('button[type="submit"]');
+        if (btn) {
+            if (btn.dataset.submitted === 'true') {
+                return false;
+            }
+            btn.dataset.submitted = 'true';
+            btn.innerHTML = '&#x21bb; Re-evaluating...';
+            setTimeout(() => { btn.disabled = true; }, 0);
+        }
+        return true;
     }
 
     // Initialize continuous queue

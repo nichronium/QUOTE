@@ -13,7 +13,7 @@ from core.canonical_quote import (
     QuoteItem,
     quantize_currency,
 )
-from matching.models import MatchedQuoteItem, MatchStatus, RFQLineItem
+from matching.models import MatchedQuoteItem, MatchStatus, RFQLineItem, UOMConversionResult
 from matching.uom_resolver import UOMResolver
 from core.currency import CurrencyRateService
 from comparison.models import (
@@ -53,8 +53,18 @@ class CommercialNormalizer:
 
         supplier_id = submission.supplier_id
         supplier_name = submission.supplier_name
-        quoted_currency = submission.canonical_quote.currency.upper().strip()
-        base_curr = base_currency.upper().strip()
+        quoted_currency = submission.canonical_quote.currency.upper().strip() if submission.canonical_quote.currency else None
+        base_curr = base_currency.upper().strip() if base_currency else "INR"
+
+        if quoted_currency is None:
+            issues.append(ComparisonIssue(
+                code=ComparisonIssueCode.MISSING_COMMERCIAL_DATA,
+                severity=ComparisonIssueSeverity.BLOCKING,
+                message="Missing quotation currency.",
+                supplier_id=supplier_id,
+                rfq_line_id=rfq_line.rfq_line_id,
+                field_name="currency"
+            ))
 
         # 1. UOM Compatibility & Conversion
         if rfq_line.requested_uom and quote_item.quoted_uom:
@@ -105,9 +115,9 @@ class CommercialNormalizer:
         # 3. Volume Tier Selection
         selected_tier: Optional[PriceTier] = None
         tier_selection_reason: Optional[str] = None
-        unit_price_quoted: Decimal = quote_item.unit_price
+        unit_price_quoted: Optional[Decimal] = quote_item.unit_price
 
-        if quote_item.price_tiers and rfq_qty_in_quoted_uom is not None:
+        if unit_price_quoted is not None and quote_item.price_tiers and rfq_qty_in_quoted_uom is not None:
             matched_tier = self._select_volume_tier(quote_item.price_tiers, rfq_qty_in_quoted_uom)
             if matched_tier:
                 selected_tier = matched_tier
@@ -131,23 +141,38 @@ class CommercialNormalizer:
 
         # 4. Pricing in Quoted Currency
         discount_pct = quote_item.discount_pct
-        net_unit_price_quoted = quantize_currency(
-            unit_price_quoted * (Decimal("1.0") - (discount_pct / Decimal("100.0")))
-        )
-        if rfq_qty_in_quoted_uom is not None and rfq_line.requested_quantity is not None:
-            line_taxable_quoted = quantize_currency(net_unit_price_quoted * rfq_qty_in_quoted_uom)
-            tax_rate_pct = quote_item.tax_rate_pct
-            tax_amount_quoted = quantize_currency(line_taxable_quoted * (tax_rate_pct / Decimal("100.0")))
-            line_landed_base_item = line_taxable_quoted + tax_amount_quoted
-            line_landed_cost_quoted = line_landed_base_item + allocated_charge_quoted
-            unit_landed_price_quoted = (line_landed_cost_quoted / rfq_line.requested_quantity).quantize(
-                Decimal("0.0001"), rounding=ROUND_HALF_UP
-            )
+        net_unit_price_quoted: Optional[Decimal] = None
+        tax_amount_quoted: Optional[Decimal] = None
+        line_landed_cost_quoted: Optional[Decimal] = None
+        unit_landed_price_quoted: Optional[Decimal] = None
+        tax_rate_pct = quote_item.tax_rate_pct
+
+        if unit_price_quoted is None:
+            issues.append(ComparisonIssue(
+                code=ComparisonIssueCode.MISSING_COMMERCIAL_DATA,
+                severity=ComparisonIssueSeverity.BLOCKING,
+                message=f"Quotation item for RFQ line '{rfq_line.rfq_line_id}' is missing quoted unit price.",
+                supplier_id=supplier_id,
+                rfq_line_id=rfq_line.rfq_line_id,
+                field_name="unit_price"
+            ))
         else:
-            line_taxable_quoted = Decimal("0.00")
-            tax_amount_quoted = Decimal("0.00")
-            line_landed_cost_quoted = Decimal("0.00")
-            unit_landed_price_quoted = Decimal("0.0000")
+            net_unit_price_quoted = quantize_currency(
+                unit_price_quoted * (Decimal("1.0") - (discount_pct / Decimal("100.0")))
+            )
+            if rfq_qty_in_quoted_uom is not None and rfq_line.requested_quantity is not None:
+                line_taxable_quoted = quantize_currency(net_unit_price_quoted * rfq_qty_in_quoted_uom)
+                tax_amount_quoted = quantize_currency(line_taxable_quoted * (tax_rate_pct / Decimal("100.0")))
+                line_landed_base_item = line_taxable_quoted + tax_amount_quoted
+                line_landed_cost_quoted = line_landed_base_item + allocated_charge_quoted
+                unit_landed_price_quoted = (line_landed_cost_quoted / rfq_line.requested_quantity).quantize(
+                    Decimal("0.0001"), rounding=ROUND_HALF_UP
+                )
+            else:
+                line_taxable_quoted = Decimal("0.00")
+                tax_amount_quoted = Decimal("0.00")
+                line_landed_cost_quoted = Decimal("0.00")
+                unit_landed_price_quoted = Decimal("0.0000")
 
         # 5. Currency Normalization
         exchange_rate: Optional[Decimal] = None
@@ -155,28 +180,29 @@ class CommercialNormalizer:
         unit_landed_price_base: Optional[Decimal] = None
         line_total_landed_base: Optional[Decimal] = None
 
-        if quoted_currency == base_curr:
-            exchange_rate = Decimal("1.0")
-            exchange_rate_source = "BASE_CURRENCY"
-            unit_landed_price_base = unit_landed_price_quoted
-            line_total_landed_base = quantize_currency(line_landed_cost_quoted)
-        else:
-            exchange_rate = exchange_rates.get(quoted_currency) if exchange_rates else None
-            if exchange_rate and exchange_rate > Decimal("0.0"):
-                exchange_rate_source = "CONFIGURED_RATE"
-                unit_landed_price_base = (unit_landed_price_quoted * exchange_rate).quantize(
-                    Decimal("0.0001"), rounding=ROUND_HALF_UP
-                )
-                line_total_landed_base = quantize_currency(line_landed_cost_quoted * exchange_rate)
+        if quoted_currency is not None and unit_landed_price_quoted is not None and line_landed_cost_quoted is not None:
+            if quoted_currency == base_curr:
+                exchange_rate = Decimal("1.0")
+                exchange_rate_source = "BASE_CURRENCY"
+                unit_landed_price_base = unit_landed_price_quoted
+                line_total_landed_base = quantize_currency(line_landed_cost_quoted)
             else:
-                issues.append(ComparisonIssue(
-                    code=ComparisonIssueCode.MISSING_EXCHANGE_RATE,
-                    severity=ComparisonIssueSeverity.BLOCKING,
-                    message=f"Missing exchange rate from '{quoted_currency}' to base '{base_curr}'",
-                    supplier_id=supplier_id,
-                    rfq_line_id=rfq_line.rfq_line_id,
-                    field_name="currency"
-                ))
+                exchange_rate = exchange_rates.get(quoted_currency) if exchange_rates else None
+                if exchange_rate and exchange_rate > Decimal("0.0"):
+                    exchange_rate_source = "CONFIGURED_RATE"
+                    unit_landed_price_base = (unit_landed_price_quoted * exchange_rate).quantize(
+                        Decimal("0.0001"), rounding=ROUND_HALF_UP
+                    )
+                    line_total_landed_base = quantize_currency(line_landed_cost_quoted * exchange_rate)
+                else:
+                    issues.append(ComparisonIssue(
+                        code=ComparisonIssueCode.MISSING_EXCHANGE_RATE,
+                        severity=ComparisonIssueSeverity.BLOCKING,
+                        message=f"Missing exchange rate from '{quoted_currency}' to base '{base_curr}'",
+                        supplier_id=supplier_id,
+                        rfq_line_id=rfq_line.rfq_line_id,
+                        field_name="currency"
+                    ))
 
         # 6. Comparability Assessment
         match_status = matched_item.match_status
@@ -255,14 +281,21 @@ class CommercialNormalizer:
     ) -> SupplierComparison:
         """Assembles quote-level supplier comparison summary."""
         quote = submission.canonical_quote
-        quoted_curr = quote.currency.upper().strip()
-        base_curr = base_currency.upper().strip()
+        quoted_curr = quote.currency.upper().strip() if quote.currency else None
+        base_curr = base_currency.upper().strip() if base_currency else "INR"
         issues: List[ComparisonIssue] = []
 
         # Exchange rate
         exchange_rate: Optional[Decimal] = None
         exchange_rate_source: Optional[str] = None
-        if quoted_curr == base_curr:
+        if quoted_curr is None:
+            issues.append(ComparisonIssue(
+                code=ComparisonIssueCode.MISSING_COMMERCIAL_DATA,
+                severity=ComparisonIssueSeverity.BLOCKING,
+                message="Missing quotation currency.",
+                supplier_id=submission.supplier_id
+            ))
+        elif quoted_curr == base_curr:
             exchange_rate = Decimal("1.0")
             exchange_rate_source = "BASE_CURRENCY"
         elif exchange_rates and quoted_curr in exchange_rates and exchange_rates[quoted_curr] > Decimal("0.0"):
@@ -326,7 +359,7 @@ class CommercialNormalizer:
 
         if exchange_rate:
             for p in normalized_prices:
-                if p.is_comparable and p.line_total_landed_base is not None:
+                if p.is_comparable and p.line_total_landed_base is not None and p.net_unit_price_quoted is not None and p.requested_qty is not None and p.tax_amount_quoted is not None:
                     # Item net & tax
                     net_base = quantize_currency(p.net_unit_price_quoted * (p.requested_qty / p.uom_conversion_factor) * exchange_rate)
                     tax_base = quantize_currency(p.tax_amount_quoted * exchange_rate)

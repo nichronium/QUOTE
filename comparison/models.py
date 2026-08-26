@@ -81,8 +81,8 @@ class NormalizedItemPrice(BaseModel):
     is_provisional: bool = False
 
     # Quantity & UOM
-    quoted_qty: Decimal
-    quoted_uom: str
+    quoted_qty: Optional[Decimal] = None
+    quoted_uom: Optional[str] = None
     requested_qty: Optional[Decimal] = None
     requested_uom: Optional[str] = None
     uom_conversion_factor: Decimal = Decimal("1.0")  # target_units = quoted_units * factor
@@ -92,18 +92,18 @@ class NormalizedItemPrice(BaseModel):
     tier_selection_reason: Optional[str] = None
 
     # Pricing components in quoted currency (for requested RFQ quantity)
-    unit_price_quoted: Decimal
+    unit_price_quoted: Optional[Decimal] = None
     discount_pct: Decimal = Decimal("0.0")
-    net_unit_price_quoted: Decimal
+    net_unit_price_quoted: Optional[Decimal] = None
     tax_rate_pct: Decimal = Decimal("0.0")
-    tax_amount_quoted: Decimal = Decimal("0.0")
+    tax_amount_quoted: Optional[Decimal] = None
     allocated_charges_quoted: Decimal = Decimal("0.0")
     charge_allocation_method: ChargeAllocationMethod = ChargeAllocationMethod.NONE
-    line_landed_cost_quoted: Decimal
-    unit_landed_price_quoted: Decimal  # Landed cost per requested RFQ unit in quoted currency
+    line_landed_cost_quoted: Optional[Decimal] = None
+    unit_landed_price_quoted: Optional[Decimal] = None  # Landed cost per requested RFQ unit in quoted currency
 
     # Currency normalization to base currency
-    quoted_currency: str
+    quoted_currency: Optional[str] = None
     base_currency: str
     exchange_rate: Optional[Decimal] = None
     exchange_rate_source: Optional[str] = None
@@ -146,7 +146,7 @@ class SupplierComparison(BaseModel):
     supplier_id: str
     supplier_name: str
     quote_id: str
-    source_currency: str
+    source_currency: Optional[str] = None
     base_currency: str
     exchange_rate: Optional[Decimal] = None
     exchange_rate_source: Optional[str] = None

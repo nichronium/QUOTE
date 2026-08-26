@@ -3621,7 +3621,9 @@ def _generate_fresh_award_proposal(rfq_id: str, comp: Dict[str, Any], scenario: 
             sid = supp_price.get("supplier_id")
             sname = supp_price.get("supplier_name", sid)
             qid = supp_price.get("quote_id", sid)
-            landed = Decimal(str(supp_price.get("unit_landed_price_base") or supp_price.get("effective_unit_landed_cost") or 0))
+            
+            raw_landed = supp_price.get("unit_landed_price_base") or supp_price.get("effective_unit_landed_cost")
+            landed = Decimal(str(raw_landed)) if raw_landed is not None and str(raw_landed).strip() not in ["", "None", "null"] else None
             cur = supp_price.get("quoted_currency") or supp_price.get("currency", base_cur)
             
             raw_qqty = supp_price.get("quoted_qty") or supp_price.get("quoted_quantity")
@@ -3629,21 +3631,42 @@ def _generate_fresh_award_proposal(rfq_id: str, comp: Dict[str, Any], scenario: 
             quom = supp_price.get("quoted_uom", req_uom)
             is_comparable = supp_price.get("is_comparable", True)
 
-            base_unit_price = Decimal(str(supp_price.get("unit_price_quoted", 0)))
-            discount_pct = Decimal(str(supp_price.get("discount_pct", 0)))
-            net_unit_price = Decimal(str(supp_price.get("net_unit_price_quoted", base_unit_price)))
-            tax_rate_pct = Decimal(str(supp_price.get("tax_rate_pct", 0)))
-            tax_amount = Decimal(str(supp_price.get("tax_amount_quoted", 0)))
-            allocated_charges = Decimal(str(supp_price.get("allocated_charges_quoted", 0)))
-            exchange_rate = Decimal(str(supp_price.get("exchange_rate", 1.0)))
-            uom_factor = Decimal(str(supp_price.get("uom_conversion_factor", 1.0)))
+            raw_base_unit_price = supp_price.get("unit_price_quoted")
+            base_unit_price = Decimal(str(raw_base_unit_price)) if raw_base_unit_price is not None and str(raw_base_unit_price).strip() not in ["", "None", "null"] else None
 
-            if landed > 0 and is_comparable and (min_line_cost is None or landed < min_line_cost):
-                min_line_cost = landed
-                l1_line_supplier_id = sid
+            raw_discount = supp_price.get("discount_pct")
+            discount_pct = Decimal(str(raw_discount)) if raw_discount is not None and str(raw_discount).strip() not in ["", "None", "null"] else Decimal("0")
 
-            if is_comparable and landed > 0:
-                per_unit_tax = (tax_amount / req_qty) if (req_qty and req_qty > Decimal("0") and tax_amount > Decimal("0")) else (net_unit_price * (tax_rate_pct / Decimal("100.0")) * exchange_rate)
+            raw_net_unit_price = supp_price.get("net_unit_price_quoted")
+            if raw_net_unit_price is not None and str(raw_net_unit_price).strip() not in ["", "None", "null"]:
+                net_unit_price = Decimal(str(raw_net_unit_price))
+            elif base_unit_price is not None:
+                net_unit_price = base_unit_price
+            else:
+                net_unit_price = None
+
+            raw_tax_rate = supp_price.get("tax_rate_pct")
+            tax_rate_pct = Decimal(str(raw_tax_rate)) if raw_tax_rate is not None and str(raw_tax_rate).strip() not in ["", "None", "null"] else Decimal("0")
+
+            raw_tax_amount = supp_price.get("tax_amount_quoted")
+            tax_amount = Decimal(str(raw_tax_amount)) if raw_tax_amount is not None and str(raw_tax_amount).strip() not in ["", "None", "null"] else None
+
+            raw_alloc_charges = supp_price.get("allocated_charges_quoted")
+            allocated_charges = Decimal(str(raw_alloc_charges)) if raw_alloc_charges is not None and str(raw_alloc_charges).strip() not in ["", "None", "null"] else Decimal("0")
+
+            raw_exchange_rate = supp_price.get("exchange_rate")
+            exchange_rate = Decimal(str(raw_exchange_rate)) if raw_exchange_rate is not None and str(raw_exchange_rate).strip() not in ["", "None", "null"] else Decimal("1.0")
+
+            raw_uom_factor = supp_price.get("uom_conversion_factor")
+            uom_factor = Decimal(str(raw_uom_factor)) if raw_uom_factor is not None and str(raw_uom_factor).strip() not in ["", "None", "null"] else Decimal("1.0")
+
+            if is_comparable and landed is not None and landed > Decimal("0") and base_unit_price is not None:
+                if min_line_cost is None or landed < min_line_cost:
+                    min_line_cost = landed
+                    l1_line_supplier_id = sid
+
+            if is_comparable and landed is not None and landed > Decimal("0") and base_unit_price is not None:
+                per_unit_tax = (tax_amount / req_qty) if (req_qty and req_qty > Decimal("0") and tax_amount is not None and tax_amount > Decimal("0")) else (net_unit_price * (tax_rate_pct / Decimal("100.0")) * exchange_rate if net_unit_price is not None else Decimal("0"))
                 per_unit_charges = (allocated_charges / req_qty) if (req_qty and req_qty > Decimal("0") and allocated_charges > Decimal("0")) else Decimal("0")
 
                 converted_capacity = (qqty * uom_factor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if qqty is not None else None
@@ -3691,6 +3714,32 @@ def _generate_fresh_award_proposal(rfq_id: str, comp: Dict[str, Any], scenario: 
                     "uom_conversion_formula": uom_formula,
                     "landed_price_breakdown": landed_breakdown,
                     "is_comparable": True,
+                    "is_l1_for_line": False,
+                })
+            else:
+                supplier_bids.append({
+                    "supplier_id": sid,
+                    "supplier_name": sname,
+                    "quote_id": qid,
+                    "quoted_qty": str(qqty) if qqty is not None else None,
+                    "quoted_uom": quom,
+                    "supplier_quoted_qty": str(qqty) if qqty is not None else None,
+                    "supplier_quoted_uom": quom,
+                    "converted_capacity": None,
+                    "converted_uom": req_uom,
+                    "unit_landed_cost": str(landed) if landed is not None else None,
+                    "currency": cur,
+                    "base_unit_price": str(quantize_currency(base_unit_price)) if base_unit_price is not None else None,
+                    "discount_pct": str(discount_pct),
+                    "net_unit_price": str(quantize_currency(net_unit_price)) if net_unit_price is not None else None,
+                    "tax_rate_pct": str(tax_rate_pct),
+                    "tax_amount": None,
+                    "allocated_charges": None,
+                    "exchange_rate": str(exchange_rate),
+                    "uom_conversion_factor": str(uom_factor),
+                    "uom_conversion_formula": None,
+                    "landed_price_breakdown": {},
+                    "is_comparable": False,
                     "is_l1_for_line": False,
                 })
 

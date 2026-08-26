@@ -161,7 +161,7 @@ class QuotationComparator:
             total_val = Decimal("0.0")
             for rfq_line in rfq.items:
                 m_item = self._find_matched_item_for_rfq_line(rfq_line, submission.matched_items)
-                if m_item:
+                if m_item and m_item.quote_item.unit_price is not None and rfq_line.requested_quantity is not None:
                     val = quantize_currency(m_item.quote_item.unit_price * rfq_line.requested_quantity)
                     line_values[rfq_line.rfq_line_id] = val
                     total_val += val

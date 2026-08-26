@@ -93,7 +93,7 @@
             </div>
         </div>
 
-        <form action="/comparisons" method="POST">
+        <form action="/comparisons" method="POST" id="comparison-form" onsubmit="return handleComparisonSubmit(this);">
             <input type="hidden" name="rfq_id" value="{{ selected_rfq.rfq_id }}">
 
             <!-- Clean & Compact Comparison RFQ Section -->
@@ -279,9 +279,22 @@
     function validateQuoteSelection() {
         const checked = document.querySelectorAll('input[name="quote_ids"]:checked');
         const btn = document.getElementById('btn-run-evaluation');
-        if (btn) {
+        if (btn && btn.dataset.submitted !== 'true') {
             btn.disabled = (checked.length === 0);
         }
+    }
+
+    function handleComparisonSubmit(form) {
+        const btn = document.getElementById('btn-run-evaluation');
+        if (btn) {
+            if (btn.dataset.submitted === 'true') {
+                return false;
+            }
+            btn.dataset.submitted = 'true';
+            btn.innerText = 'Running Comparison...';
+            setTimeout(() => { btn.disabled = true; }, 0);
+        }
+        return true;
     }
 </script>
 {% endblock %}
