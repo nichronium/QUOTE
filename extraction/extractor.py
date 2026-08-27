@@ -423,14 +423,6 @@ class QuoteExtractor:
             quoted_qty = None
 
         unit_price = normalize_decimal(price_str, default=None)
-        if unit_price is None and "unit_price" not in col_map and len(cells) > 1:
-            for i, c in enumerate(cells):
-                if i != col_map.get("qty") and i != col_map.get("description"):
-                    val = normalize_decimal(c, default=None)
-                    if val is not None and val > Decimal("0.0"):
-                        unit_price = val
-                        price_str = c
-                        break
 
         uom_str = get_cell("uom")
         uom = normalize_uom(uom_str, default=None)

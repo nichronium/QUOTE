@@ -8,34 +8,66 @@ Ensures numeric tokens are never glued across whitespace or adjacent columns.
 from datetime import date
 from decimal import Decimal, InvalidOperation
 import re
-from typing import Optional
+from typing import Any, Optional
 from dateutil import parser as date_parser
 
 from extraction.semantic_registry import CURRENCY_MAP, UOM_MAP
 
 
-def normalize_decimal(val: Optional[str], default: Optional[Decimal] = None) -> Optional[Decimal]:
+def normalize_decimal(val: Optional[Any], default: Optional[Decimal] = None) -> Optional[Decimal]:
     """
-    Safely extracts and parses numeric string to Decimal.
-    Isolates numeric tokens without stripping whitespace globally across column boundaries.
+    Safely extracts and parses a standalone numeric token to Decimal.
+    Strictly rejects alphanumeric identifiers, model codes, and dimension expressions (e.g. M40, 6205-2RS, DN50, 4SQMM).
+    Supports standalone prices with currency prefixes, commas, and trailing UOM slashes.
     """
     if val is None:
         return default
+    if isinstance(val, (int, float, Decimal)):
+        return Decimal(str(val))
     val_str = str(val).strip()
     if not val_str:
         return default
 
-    # Remove currency symbols and formatting commas between digits
-    val_str = re.sub(r"[₹$€£]", "", val_str)
-    val_str = re.sub(r"(?<=\d),(?=\d)", "", val_str)
+    # Known non-numeric placeholders
+    if val_str.lower() in ["none", "null", "n/a", "na", "-", "—", "nil", ""]:
+        return default
 
-    # Match first standalone numeric token (e.g. 750 in "Freight\t750\t0" or 14219.00 in "14219.00")
-    match = re.search(r"[-+]?\d+(?:\.\d+)?", val_str)
-    if match:
+    # Remove currency symbols and surrounding formatting
+    cleaned = re.sub(r"[₹$€£¥]", "", val_str).strip()
+
+    # Strip common currency words at start/end
+    cleaned = re.sub(r"^(?:inr|usd|eur|gbp|rs\.?|aud|cad|sgd|aed)\s*", "", cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"\s*(?:inr|usd|eur|gbp|rs\.?|aud|cad|sgd|aed)$", "", cleaned, flags=re.IGNORECASE).strip()
+
+    # Remove formatting commas between digits
+    cleaned = re.sub(r"(?<=\d),(?=\d)", "", cleaned)
+
+    # 1. Clean standalone number (e.g. '180', '180.50', '-12.5', '+100')
+    if re.fullmatch(r"[-+]?\d+(?:\.\d+)?", cleaned):
         try:
-            return Decimal(match.group(0))
+            return Decimal(cleaned)
         except (InvalidOperation, ValueError):
             return default
+
+    # 2. Number with UOM suffix attached with slash or space (e.g. '180/pcs', '180 / unit', '180.50/MTR')
+    slash_match = re.fullmatch(r"([-+]?\d+(?:\.\d+)?)\s*(?:/|per)\s*[a-zA-Z]+", cleaned, flags=re.IGNORECASE)
+    if slash_match:
+        try:
+            return Decimal(slash_match.group(1))
+        except (InvalidOperation, ValueError):
+            return default
+
+    # 3. Tab/newline separated text with standalone numeric tokens (e.g. 'Freight\t750\t0')
+    tokens = re.split(r"[\t\n\r]+", cleaned)
+    for tok in tokens:
+        tok = tok.strip()
+        if re.fullmatch(r"[-+]?\d+(?:\.\d+)?", tok):
+            try:
+                return Decimal(tok)
+            except (InvalidOperation, ValueError):
+                continue
+
+    # Reject alphanumeric identifiers (M40, DN50, 6205-2RS, 4SQMM, M8 x 40, 6 sq mm, etc.)
     return default
 
 
