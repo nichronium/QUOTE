@@ -182,6 +182,8 @@ def list_rfqs(include_demo: bool = False, lifecycle_filter: Optional[str] = None
             filter_lower = (lifecycle_filter or "all").lower().strip()
             if filter_lower == "active" and lifecycle_status in ["ARCHIVED", "CANCELLED", "CLOSED"]:
                 continue
+            elif filter_lower == "award_pending" and not (len(comp_list) > 0 and not (award_rec is not None and award_rec.get("status") == "FINALIZED")):
+                continue
             elif filter_lower == "archived" and lifecycle_status != "ARCHIVED":
                 continue
             elif filter_lower == "cancelled" and lifecycle_status != "CANCELLED":
@@ -4453,54 +4455,196 @@ def save_application_settings(new_settings: Dict[str, Any]) -> Dict[str, Any]:
     return current
 
 
+def get_workspace_summary_counts() -> Dict[str, int]:
+    """Returns exact live counts of transactional items currently in storage."""
+    rfqs_count = len(list(RFQS_DIR.glob("*.json"))) if RFQS_DIR.exists() else 0
+    comparisons_count = len(list(COMPARISONS_DIR.glob("*.json"))) if COMPARISONS_DIR.exists() else 0
+    awards_count = len(list(AWARDS_DIR.glob("*.json"))) if AWARDS_DIR.exists() else 0
+    
+    quote_dirs_count = 0
+    if DATA_DIR.exists():
+        for item in DATA_DIR.iterdir():
+            if item.is_dir() and item.name not in ["rfqs", "comparisons", "awards", "item_master", "benchmark_fixtures"]:
+                quote_dirs_count += 1
+                
+    return {
+        "rfqs_count": rfqs_count,
+        "comparisons_count": comparisons_count,
+        "awards_count": awards_count,
+        "quotes_count": quote_dirs_count
+    }
+
+
 def reset_all_procurement_data() -> Dict[str, Any]:
     """
-    Cleans ONLY explicitly identified test-generated quotes, comparisons, and test RFQs.
-    CRITICAL INVARIANT: Real user-created RFQs, quotations, comparisons, and awards are permanent business records and are NEVER deleted.
+    Authoritative Application Data Reset.
+    Clears all transactional procurement data:
+    1. test_runs/awards/*.json
+    2. test_runs/comparisons/*.json
+    3. quote directories (Q-*, QUOTE-*, TEST-*, BENCH-*, etc.), benchmark fixtures, and temp spreadsheet files
+    4. test_runs/rfqs/*.json
+    5. auxiliary mappings (supplier_mappings.json) and import batches (import_batches.json)
+    
+    Preserves:
+    - test_runs/settings.json
+    - test_runs/item_master/catalog.json
+    - test_runs/item_master/suppliers.json
+    
+    Re-creates required directory shell and performs post-reset programmatic verification.
     """
-    # 1. Preserve RFQs directory and all user RFQs
-    RFQS_DIR.mkdir(parents=True, exist_ok=True)
+    import gc
+    gc.collect()
 
-    # 2. Only remove test RFQs
-    for rf in list(RFQS_DIR.glob("*.json")):
+    errors: List[str] = []
+    stats = {
+        "awards_cleared": 0,
+        "comparisons_cleared": 0,
+        "quotes_cleared": 0,
+        "rfqs_cleared": 0,
+        "fixtures_cleared": 0,
+        "temp_files_cleared": 0,
+        "mappings_cleared": 0,
+        "batches_cleared": 0,
+    }
+
+    # Helper for Windows file deletion with retry
+    def _safe_unlink(path: Path) -> bool:
+        if not path.exists():
+            return True
         try:
-            data = json.loads(rf.read_text(encoding="utf-8"))
-            if data.get("source") in ["TEST", "DEMO"] or data.get("is_test", False) or rf.stem.startswith("TEST-") or rf.stem.startswith("RFQ-TEST-"):
-                rf.unlink()
+            path.unlink()
+            return True
         except Exception:
-            pass
-
-    # 3. Only remove test Comparisons
-    if COMPARISONS_DIR.exists():
-        for cf in list(COMPARISONS_DIR.glob("*.json")):
+            gc.collect()
             try:
-                data = json.loads(cf.read_text(encoding="utf-8"))
-                rfq_id = data.get("rfq_id", "")
-                if rfq_id.startswith("TEST-") or rfq_id.startswith("RFQ-TEST-") or cf.stem.startswith("TEST-"):
-                    cf.unlink()
-            except Exception:
-                pass
+                path.unlink()
+                return True
+            except Exception as e:
+                errors.append(f"Failed to delete file {path.name}: {e}")
+                return False
 
-    # 4. Only remove test Awards
+    # Helper for Windows directory deletion with retry
+    def _safe_rmtree(path: Path) -> bool:
+        if not path.exists():
+            return True
+        try:
+            shutil.rmtree(path)
+            return True
+        except Exception:
+            gc.collect()
+            try:
+                for root, dirs, files in os.walk(path, topdown=False):
+                    for name in files:
+                        try:
+                            os.unlink(os.path.join(root, name))
+                        except Exception:
+                            pass
+                    for name in dirs:
+                        try:
+                            os.rmdir(os.path.join(root, name))
+                        except Exception:
+                            pass
+                os.rmdir(path)
+                return True
+            except Exception as e:
+                errors.append(f"Failed to delete directory {path.name}: {e}")
+                return False
+
+    # 1. Clear Awards
     if AWARDS_DIR.exists():
         for af in list(AWARDS_DIR.glob("*.json")):
-            try:
-                if af.stem.startswith("TEST-") or af.stem.startswith("RFQ-TEST-"):
-                    af.unlink()
-            except Exception:
-                pass
+            if _safe_unlink(af):
+                stats["awards_cleared"] += 1
 
-    # 5. Clean test quote directories only
-    for item in list(DATA_DIR.iterdir()):
-        if item.name in ["item_master", "rfqs", "comparisons", "awards", "settings.json", "supplier_mappings.json", "import_batches.json"]:
-            continue
-        if item.is_dir() and (item.name.startswith("TEST-") or item.name.startswith("Q-BENCH-") or item.name.startswith("BENCH-") or "test" in item.name.lower()):
-            try:
-                shutil.rmtree(item)
-            except Exception:
-                pass
+    # 2. Clear Comparisons
+    if COMPARISONS_DIR.exists():
+        for cf in list(COMPARISONS_DIR.glob("*.json")):
+            if _safe_unlink(cf):
+                stats["comparisons_cleared"] += 1
 
-    return {"status": "success", "message": "Test artifacts cleaned. All user-created RFQs and quotes remain permanently preserved."}
+    # 3. Clear Quote directories, benchmark fixtures, and root temp files
+    if DATA_DIR.exists():
+        # Benchmark fixtures
+        fixtures_dir = DATA_DIR / "benchmark_fixtures"
+        if fixtures_dir.exists():
+            if _safe_rmtree(fixtures_dir):
+                stats["fixtures_cleared"] += 1
+
+        # Quote directories and root spreadsheets
+        for item in list(DATA_DIR.iterdir()):
+            if item.name in ["rfqs", "comparisons", "awards", "item_master"]:
+                continue
+            if item.name == "settings.json":
+                continue
+            if item.is_dir():
+                if _safe_rmtree(item):
+                    stats["quotes_cleared"] += 1
+            elif item.suffix.lower() in [".xlsx", ".xls", ".csv", ".pdf", ".tmp"]:
+                if _safe_unlink(item):
+                    stats["temp_files_cleared"] += 1
+
+    # 4. Clear RFQs
+    if RFQS_DIR.exists():
+        for rf in list(RFQS_DIR.glob("*.json")):
+            if _safe_unlink(rf):
+                stats["rfqs_cleared"] += 1
+
+    # 5. Clear auxiliary mappings & import batches
+    if SUPPLIER_MAPPINGS_FILE.exists():
+        if _safe_unlink(SUPPLIER_MAPPINGS_FILE):
+            stats["mappings_cleared"] += 1
+
+    if IMPORT_BATCHES_FILE.exists():
+        if _safe_unlink(IMPORT_BATCHES_FILE):
+            stats["batches_cleared"] += 1
+
+    # 6. Ensure required directory shell exists
+    RFQS_DIR.mkdir(parents=True, exist_ok=True)
+    COMPARISONS_DIR.mkdir(parents=True, exist_ok=True)
+    AWARDS_DIR.mkdir(parents=True, exist_ok=True)
+    ITEM_MASTER_DIR.mkdir(parents=True, exist_ok=True)
+
+    # 7. Verify baseline master data and preserve settings
+    ensure_item_master_initialized()
+    get_supplier_master(include_inactive=True)
+    get_application_settings()
+
+    # 8. Post-reset programmatic verification
+    remaining_rfqs = len(list(RFQS_DIR.glob("*.json")))
+    remaining_comparisons = len(list(COMPARISONS_DIR.glob("*.json")))
+    remaining_awards = len(list(AWARDS_DIR.glob("*.json")))
+    remaining_quote_dirs = sum(1 for item in DATA_DIR.iterdir() if item.is_dir() and item.name not in ["rfqs", "comparisons", "awards", "item_master"])
+
+    if remaining_rfqs > 0:
+        errors.append(f"Verification failed: {remaining_rfqs} RFQ files still present.")
+    if remaining_comparisons > 0:
+        errors.append(f"Verification failed: {remaining_comparisons} comparison files still present.")
+    if remaining_awards > 0:
+        errors.append(f"Verification failed: {remaining_awards} award files still present.")
+    if remaining_quote_dirs > 0:
+        errors.append(f"Verification failed: {remaining_quote_dirs} quote directories still present.")
+    if SUPPLIER_MAPPINGS_FILE.exists():
+        errors.append("Verification failed: supplier_mappings.json still present.")
+    if IMPORT_BATCHES_FILE.exists():
+        errors.append("Verification failed: import_batches.json still present.")
+    if not (ITEM_MASTER_DIR / "catalog.json").exists():
+        errors.append("Verification failed: Item Master catalog.json missing.")
+    if not SETTINGS_FILE.exists():
+        errors.append("Verification failed: settings.json missing.")
+
+    if errors:
+        return {
+            "status": "error",
+            "message": "Reset completed with errors or incomplete verification.",
+            "errors": errors,
+            "stats": stats
+        }
+
+    return {
+        "status": "success",
+        "message": "Workspace data successfully reset.",
+        "stats": stats
+    }
 
 
 def seed_demo_benchmark_data() -> Dict[str, Any]:

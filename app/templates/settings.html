@@ -10,24 +10,59 @@
 </div>
 
 <!-- Reset Confirmation Modal -->
-<div id="resetConfirmModal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 99990; display: none; align-items: center; justify-content: center;">
-    <div style="background: var(--bg-card); border: 1px solid var(--danger-border); border-radius: 14px; padding: 2rem; max-width: 480px; width: 90%; box-shadow: 0 20px 40px rgba(0,0,0,0.5); animation: silkyFadeInUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);">
+<div id="resetConfirmModal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.65); backdrop-filter: blur(5px); z-index: 99990; display: none; align-items: center; justify-content: center;">
+    <div style="background: var(--bg-card); border: 1px solid var(--danger-border); border-radius: 14px; padding: 2rem; max-width: 520px; width: 92%; box-shadow: 0 20px 40px rgba(0,0,0,0.5); animation: silkyFadeInUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);">
         <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
-            <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--danger-subtle); color: var(--danger); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+            <div style="width: 42px; height: 42px; border-radius: 50%; background: var(--danger-subtle); color: var(--danger); display: flex; align-items: center; justify-content: center; font-size: 1.35rem; flex-shrink: 0;">
                 ⚠️
             </div>
             <div>
-                <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-main); margin: 0;">Reset All Sourcing Data?</h3>
-                <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">This will clean all RFQs, quotes, comparisons, and awards.</p>
+                <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); margin: 0;">Reset Application Workspace Data?</h3>
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0.15rem 0 0 0;">Permanent removal of all transactional procurement state.</p>
             </div>
         </div>
-        <p style="font-size: 0.8125rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.5rem;">
-            This action will clear all user procurement rounds, supplier quotations, comparison matrices, and award decisions, starting fresh as a new application. The baseline Item Master catalog will be preserved.
+
+        <!-- Live Inventory to be Deleted -->
+        <div style="background: var(--bg-card-subtle); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.85rem 1rem; margin-bottom: 1.25rem;">
+            <div style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--danger); margin-bottom: 0.5rem; letter-spacing: 0.5px;">
+                Records To Be Deleted
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.8125rem;">
+                <div style="color: var(--text-main);">• RFQs: <strong id="reset-summary-rfqs" style="color: var(--danger);">{{ workspace_counts.rfqs_count if workspace_counts else 0 }}</strong></div>
+                <div style="color: var(--text-main);">• Quotes: <strong id="reset-summary-quotes" style="color: var(--danger);">{{ workspace_counts.quotes_count if workspace_counts else 0 }}</strong></div>
+                <div style="color: var(--text-main);">• Comparisons: <strong id="reset-summary-comparisons" style="color: var(--danger);">{{ workspace_counts.comparisons_count if workspace_counts else 0 }}</strong></div>
+                <div style="color: var(--text-main);">• Awards: <strong id="reset-summary-awards" style="color: var(--danger);">{{ workspace_counts.awards_count if workspace_counts else 0 }}</strong></div>
+            </div>
+            <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.6rem; border-top: 1px dashed var(--border-color); padding-top: 0.4rem;">
+                ✓ Preserves: Item Master catalog, Supplier Master records, and Company preferences.
+            </div>
+        </div>
+
+        <p style="font-size: 0.8125rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1rem;">
+            To confirm this destructive action, please type <strong style="color: var(--text-main); font-family: var(--font-mono); background: rgba(239, 68, 68, 0.15); padding: 0.15rem 0.4rem; border-radius: 4px; border: 1px solid rgba(239, 68, 68, 0.3);">RESET WORKSPACE</strong> below:
         </p>
-        <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="closeResetModal()">Cancel</button>
-            <button type="button" class="btn btn-danger btn-sm" id="confirmResetBtn" onclick="executeResetData()">
-                Yes, Reset Everything
+
+        <div style="margin-bottom: 1.25rem;">
+            <input 
+                type="text" 
+                id="reset-confirm-input" 
+                placeholder="Type RESET WORKSPACE to confirm" 
+                oninput="onResetInputChange(this.value)"
+                style="width: 100%; font-family: var(--font-mono); font-size: 0.875rem; padding: 0.6rem 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-card-subtle); color: var(--text-main);"
+                autocomplete="off"
+            >
+        </div>
+
+        <!-- Error Banner -->
+        <div id="reset-error-banner" style="display: none; background: var(--danger-subtle); border: 1px solid var(--danger-border); border-radius: 6px; padding: 0.75rem; margin-bottom: 1rem; color: var(--danger); font-size: 0.75rem;">
+            <strong style="display: block; margin-bottom: 0.25rem;">Reset Failed</strong>
+            <span id="reset-error-text"></span>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 0.75rem; align-items: center;">
+            <button type="button" class="btn btn-secondary btn-sm" id="cancelResetBtn" onclick="closeResetModal()">Cancel</button>
+            <button type="button" class="btn btn-danger btn-sm" id="confirmResetBtn" onclick="executeResetData()" disabled style="opacity: 0.5; cursor: not-allowed;">
+                Reset Workspace Data
             </button>
         </div>
     </div>
@@ -504,36 +539,103 @@
     }
 
     // 4. Reset Modal Handlers
+    let isResettingWorkspace = false;
+
     function openResetModal() {
-        document.getElementById('resetConfirmModal').style.display = 'flex';
+        const modal = document.getElementById('resetConfirmModal');
+        const input = document.getElementById('reset-confirm-input');
+        const btn = document.getElementById('confirmResetBtn');
+        const cancelBtn = document.getElementById('cancelResetBtn');
+        const errBanner = document.getElementById('reset-error-banner');
+        
+        if (input) input.value = '';
+        if (btn) {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
+            btn.innerText = 'Reset Workspace Data';
+        }
+        if (cancelBtn) cancelBtn.disabled = false;
+        if (errBanner) errBanner.style.display = 'none';
+        isResettingWorkspace = false;
+        
+        if (modal) modal.style.display = 'flex';
+        setTimeout(() => { if (input) input.focus(); }, 50);
     }
 
     function closeResetModal() {
-        document.getElementById('resetConfirmModal').style.display = 'none';
+        if (isResettingWorkspace) return;
+        const modal = document.getElementById('resetConfirmModal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function onResetInputChange(val) {
+        const btn = document.getElementById('confirmResetBtn');
+        if (!btn || isResettingWorkspace) return;
+        const isValid = (val || '').trim() === 'RESET WORKSPACE';
+        btn.disabled = !isValid;
+        btn.style.opacity = isValid ? '1' : '0.5';
+        btn.style.cursor = isValid ? 'pointer' : 'not-allowed';
     }
 
     async function executeResetData() {
+        const input = document.getElementById('reset-confirm-input');
         const btn = document.getElementById('confirmResetBtn');
+        const cancelBtn = document.getElementById('cancelResetBtn');
+        const errBanner = document.getElementById('reset-error-banner');
+        const errText = document.getElementById('reset-error-text');
+
+        if (!input || input.value.trim() !== 'RESET WORKSPACE' || isResettingWorkspace) {
+            return;
+        }
+
+        isResettingWorkspace = true;
         btn.disabled = true;
-        btn.innerHTML = '<span class="btn-spinner"></span> Resetting...';
+        btn.style.opacity = '0.8';
+        btn.style.cursor = 'wait';
+        btn.innerHTML = '<span class="btn-spinner"></span> Resetting workspace data...';
+        if (cancelBtn) cancelBtn.disabled = true;
+        if (errBanner) errBanner.style.display = 'none';
 
         try {
             const res = await fetch('/api/settings/reset', { method: 'POST' });
-            if (res.ok) {
-                closeResetModal();
-                showToast('Database reset complete. Redirecting...');
+            const data = await res.json();
+            
+            if (res.ok && data.status === 'success') {
+                showToast('✓ Workspace reset complete. Redirecting...');
                 setTimeout(() => {
                     window.location.href = '/';
-                }, 800);
+                }, 600);
             } else {
-                alert('Error resetting database');
+                isResettingWorkspace = false;
+                if (cancelBtn) cancelBtn.disabled = false;
                 btn.disabled = false;
-                btn.innerHTML = 'Yes, Reset Everything';
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+                btn.innerText = 'Reset Workspace Data';
+                
+                const errMsg = data.message || 'An error occurred during reset.';
+                const details = (data.errors && data.errors.length) ? ': ' + data.errors.join('; ') : '';
+                if (errBanner && errText) {
+                    errText.innerText = errMsg + details;
+                    errBanner.style.display = 'block';
+                } else {
+                    alert('Error: ' + errMsg + details);
+                }
             }
         } catch (e) {
-            alert('Error connecting to server: ' + e);
+            isResettingWorkspace = false;
+            if (cancelBtn) cancelBtn.disabled = false;
             btn.disabled = false;
-            btn.innerHTML = 'Yes, Reset Everything';
+            btn.style.opacity = '1';
+            btn.style.cursor = 'pointer';
+            btn.innerText = 'Reset Workspace Data';
+            if (errBanner && errText) {
+                errText.innerText = 'Connection error: ' + e.message;
+                errBanner.style.display = 'block';
+            } else {
+                alert('Connection error: ' + e.message);
+            }
         }
     }
 

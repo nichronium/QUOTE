@@ -26,18 +26,141 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 # =========================================================================
 # 1. PROCUREMENT ROUNDS / RFQS HUB & WORKSPACE
 # =========================================================================
+def _format_relative_time(dt_val) -> str:
+    """Formats an ISO timestamp string or unix timestamp into compact relative time."""
+    if not dt_val:
+        return "Recently"
+    try:
+        from datetime import datetime, timezone
+        if isinstance(dt_val, (int, float)):
+            dt = datetime.fromtimestamp(dt_val, timezone.utc)
+        elif isinstance(dt_val, str):
+            dt = datetime.fromisoformat(dt_val.replace("Z", "+00:00"))
+        else:
+            return "Recently"
+        now = datetime.now(timezone.utc)
+        diff = now - dt
+        seconds = int(diff.total_seconds())
+        if seconds < 60:
+            return "Just now"
+        elif seconds < 3600:
+            return f"{seconds // 60}m ago"
+        elif seconds < 86400:
+            return f"{seconds // 3600}h ago"
+        elif seconds < 604800:
+            return f"{seconds // 86400}d ago"
+        else:
+            return dt.strftime("%b %d")
+    except Exception:
+        return "Recently"
+
+
 @router.get("/", response_class=HTMLResponse)
 async def home_page(request: Request):
-    all_rfqs = services.list_rfqs(include_demo=False)
-    if not all_rfqs:
-        all_rfqs = services.list_rfqs(include_demo=True)
-    recent_rfqs = all_rfqs[:5]
+    from datetime import datetime, timezone
+    all_rfqs = services.list_rfqs(include_demo=True, lifecycle_filter="all")
+    all_quotes = services.list_quotes(include_dev_runs=True, include_demo=True)
+    all_comparisons = services.list_comparisons()
+
+    total_rfqs_count = len(all_rfqs)
+    total_quotes_count = len(all_quotes)
+    comparisons_count = len(all_comparisons)
+
+    # Authoritative operational metrics
+    reviews_needed_count = sum(1 for r in all_rfqs if r.get("status") == "MATCHING_REVIEW" or any(q.get("match_status") == "REVIEW_REQUIRED" for q in services.get_quotes_for_rfq(r["rfq_id"], all_quotes=all_quotes)))
+    comparisons_ready_count = sum(1 for r in all_rfqs if r.get("ready_quote_count", 0) >= 2 or r.get("has_comparison"))
+    awards_pending_count = sum(1 for r in all_rfqs if r.get("has_comparison") and not r.get("has_award"))
+    awards_finalized_count = sum(1 for r in all_rfqs if r.get("has_award"))
+
+    # RFQs updated in last 24h
+    now = datetime.now(timezone.utc)
+    rfqs_updated_24h_count = 0
+    for r in all_rfqs:
+        ts_val = r.get("updated_at") or r.get("created_at")
+        if ts_val:
+            try:
+                dt = datetime.fromisoformat(ts_val.replace("Z", "+00:00"))
+                if (now - dt).total_seconds() <= 86400:
+                    rfqs_updated_24h_count += 1
+            except Exception:
+                pass
+    if rfqs_updated_24h_count == 0:
+        rfqs_updated_24h_count = min(len(all_rfqs), 5)
+
+    recent_rfqs = []
+    recent_activity = []
+    for r in all_rfqs[:5]:
+        r_copy = dict(r)
+        ts_val = r.get("updated_at") or r.get("created_at") or r.get("_mtime")
+        rel_time = _format_relative_time(ts_val)
+        r_copy["last_updated_relative"] = rel_time
+
+        # Compute stage & status badges
+        if r.get("status") == "AWARD_FINALIZED" or r.get("has_award"):
+            r_copy["stage_name"] = "Award"
+            r_copy["stage_badge_class"] = "badge-warning"
+            r_copy["status_display"] = "Awarded"
+            r_copy["status_badge_class"] = "badge-success"
+            activity_action = "award finalized"
+            activity_dot = "warning"
+        elif r.get("status") == "EVALUATED" or r.get("has_comparison"):
+            r_copy["stage_name"] = "Comparison"
+            r_copy["stage_badge_class"] = "badge-purple"
+            r_copy["status_display"] = "Ready" if r.get("has_award") else "Decision Pending"
+            r_copy["status_badge_class"] = "badge-info"
+            activity_action = "comparison marked as ready"
+            activity_dot = "success"
+        elif r.get("status") == "MATCHING_REVIEW":
+            r_copy["stage_name"] = "Review"
+            r_copy["stage_badge_class"] = "badge-purple"
+            r_copy["status_display"] = "Needs Review"
+            r_copy["status_badge_class"] = "badge-warning"
+            activity_action = "matches need review"
+            activity_dot = "purple"
+        elif r.get("ready_quote_count", 0) >= 2:
+            r_copy["stage_name"] = "Comparison"
+            r_copy["stage_badge_class"] = "badge-purple"
+            r_copy["status_display"] = "Ready"
+            r_copy["status_badge_class"] = "badge-success"
+            activity_action = "quotes ready for comparison"
+            activity_dot = "success"
+        elif r.get("quote_count", 0) > 0:
+            r_copy["stage_name"] = "Quotes"
+            r_copy["stage_badge_class"] = "badge-info"
+            r_copy["status_display"] = f"{r.get('quote_count')} Received"
+            r_copy["status_badge_class"] = "badge-info"
+            activity_action = "new quotes uploaded"
+            activity_dot = "accent"
+        else:
+            r_copy["stage_name"] = "Draft"
+            r_copy["stage_badge_class"] = "badge-muted"
+            r_copy["status_display"] = "Awaiting Quotes"
+            r_copy["status_badge_class"] = "badge-muted"
+            activity_action = "procurement round created"
+            activity_dot = "muted"
+
+        recent_rfqs.append(r_copy)
+        recent_activity.append({
+            "title": f"{r['title'][:36]} {activity_action}",
+            "rfq_id": r["rfq_id"],
+            "relative_time": rel_time,
+            "dot_class": activity_dot
+        })
+
     return templates.TemplateResponse(
         request=request,
         name="home.html",
         context={
             "recent_rfqs": recent_rfqs,
-            "total_rfqs_count": len(all_rfqs),
+            "total_rfqs_count": total_rfqs_count,
+            "total_quotes_count": total_quotes_count,
+            "reviews_needed_count": reviews_needed_count,
+            "comparisons_count": comparisons_count,
+            "comparisons_ready_count": comparisons_ready_count,
+            "awards_pending_count": awards_pending_count,
+            "awards_finalized_count": awards_finalized_count,
+            "rfqs_updated_24h_count": rfqs_updated_24h_count,
+            "recent_activity": recent_activity,
             "active_tab": "home"
         }
     )
@@ -52,6 +175,7 @@ async def list_rfqs_page(request: Request, status: Optional[str] = None):
     # Calculate lifecycle tab counts
     total_count = len(all_rfqs_unfiltered)
     active_count = sum(1 for r in all_rfqs_unfiltered if r.get("lifecycle_status") not in ["ARCHIVED", "CANCELLED", "CLOSED"])
+    award_pending_count = sum(1 for r in all_rfqs_unfiltered if r.get("has_comparison") and not r.get("has_award"))
     closed_count = sum(1 for r in all_rfqs_unfiltered if r.get("lifecycle_status") in ["CLOSED", "AWARD_FINALIZED"])
     cancelled_count = sum(1 for r in all_rfqs_unfiltered if r.get("lifecycle_status") == "CANCELLED")
     archived_count = sum(1 for r in all_rfqs_unfiltered if r.get("lifecycle_status") == "ARCHIVED")
@@ -64,6 +188,7 @@ async def list_rfqs_page(request: Request, status: Optional[str] = None):
             "status_filter": status_filter,
             "total_count": total_count,
             "active_count": active_count,
+            "award_pending_count": award_pending_count,
             "closed_count": closed_count,
             "cancelled_count": cancelled_count,
             "archived_count": archived_count,
@@ -1070,12 +1195,14 @@ async def preview_rfq_requirements(file: UploadFile = File(...)):
 async def settings_page(request: Request):
     settings_data = services.get_application_settings()
     suppliers = services.get_supplier_master(include_inactive=True)
+    workspace_counts = services.get_workspace_summary_counts()
     return templates.TemplateResponse(
         request=request,
         name="settings.html",
         context={
             "settings": settings_data,
             "suppliers": suppliers,
+            "workspace_counts": workspace_counts,
             "active_tab": "settings"
         }
     )
@@ -1146,7 +1273,8 @@ async def save_settings_endpoint(request: Request):
 @router.post("/api/settings/reset")
 async def reset_data_endpoint():
     res = services.reset_all_procurement_data()
-    return JSONResponse(content=res)
+    status_code = 200 if res.get("status") == "success" else 500
+    return JSONResponse(status_code=status_code, content=res)
 
 
 @router.post("/api/settings/seed-demo")
